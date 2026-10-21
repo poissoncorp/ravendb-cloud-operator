@@ -40,7 +40,7 @@ explains one mechanism, why it is built that way, and what not to break.
 
 | | |
 |---|---|
-| [Architecture](how-it-works/architecture.md) | the pieces, one pass, the design decisions, the layout |
+| [Architecture](how-it-works/architecture.md) | the pieces, one pass, the design decisions, how other operators compare |
 | [Identity and take-over](how-it-works/identity-and-takeover.md) | finding, binding and creating |
 | [Deletion](how-it-works/deletion.md) | the finalizer, Retain and Terminate |
 | [Changes and drift](how-it-works/changes-and-drift.md) | what is compared, applied, reported |

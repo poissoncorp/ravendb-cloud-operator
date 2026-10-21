@@ -205,3 +205,38 @@ The operator paces its calls: every client shares the one pace
 `cloudclients.Cache` holds, and clients are cached per account. Status-only
 updates are filtered out of the watch so the operator does not trigger itself,
 and the manager runs a single replica.
+
+**No admission webhook.**
+Every rule that needs only the object is CEL on the CRD, which needs no
+certificates and no webhook deployment. A rule that needs the account, such as
+whether a region exists for it, is checked by the controller and reported on a
+condition rather than at `kubectl apply`.
+
+## Compared with other operators
+
+Every operator for a cloud service answers the same questions: what identifies
+a resource, what happens when one already exists, and what deleting the
+Kubernetes object does.
+
+| Operator | Identity | A resource that already exists | Change nothing | On delete, by default | Manifests from what exists |
+|---|---|---|---|---|---|
+| MongoDB Atlas | deployment name in a project | taken over and made to match the spec | `mongodb.com/atlas-reconciliation-policy: skip` | kept, since 2.0 | `atlas kubernetes config generate` |
+| Crossplane | `crossplane.io/external-name` | imported | `managementPolicies: ["Observe"]` | deleted, unless `deletionPolicy: Orphan` | copy `status.atProvider` by hand |
+| AWS (ACK) | per resource | only with an adoption policy of `adopt` or `adopt-or-create` | `services.k8s.aws/read-only` | deleted, unless `deletion-policy: retain` | `adopt` fills the spec from AWS |
+| Azure Service Operator | `azureName`, default `metadata.name` | adopted and made to match the spec | `reconcile-policy: skip` | deleted, unless `detach-on-delete` | `asoctl import azure-resource` |
+| Google Config Connector | `resourceID`, default `metadata.name` | acquired and made to match the spec | none | deleted, unless `deletion-policy: abandon` | `config-connector bulk-export` |
+| This operator | `displayName`, default `metadata.name` | taken over, under `Observe` unless the manifest says `Full`; `creationMode` can allow only one of taking over and creating | `managementPolicy: Observe` | kept (`deletionPolicy: Retain`) | `kubectl ravendb-cloud export` |
+
+Name as identity with take-over is the common model; ACK alone makes taking
+over opt-in, which `creationMode` offers here too. Taking over usually means
+reshaping at once; here a found cluster is only observed until the manifest
+says `Full`, which is Crossplane's import sequence applied by default. `Retain`
+is the default for the reason Atlas changed to it: a stray `kubectl delete`
+must not destroy a database.
+
+It is a plain operator rather than a Crossplane provider because there is no
+Terraform provider for RavenDB Cloud to generate one from (the `ravendb/ravendb`
+provider installs self-hosted nodes over SSH), and a native provider would ask
+every user to run Crossplane for three kinds of object. It borrows Crossplane's
+vocabulary where it fits: `managementPolicy` Observe or Full, `deletionPolicy`
+Retain or Terminate, and a name that finds an existing resource.
