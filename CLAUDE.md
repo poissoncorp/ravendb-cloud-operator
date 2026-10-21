@@ -10,21 +10,24 @@ manifest promises.
 
 ## Read before changing
 
-Each file in `docs/` explains one mechanism: how it works, why, and what not to
-break. Read the one for what you are about to touch.
+`docs/how-it-works/` explains the operator: start with
+[architecture.md](docs/how-it-works/architecture.md), then each file covers one
+mechanism, how it works, why, and what not to break. Read the one for what you
+are about to touch. `docs/how-to-use/` is what a user reads; keep it true when
+behaviour changes.
 
 | Changing | Read |
 |---|---|
-| a validation rule, a default, a new spec field | [docs/validation-and-defaults.md](docs/validation-and-defaults.md), then CONTRIBUTING's checklist |
-| how a cluster is found, taken over or created | [docs/identity-and-takeover.md](docs/identity-and-takeover.md) |
-| deletion, the finalizer, `deletionPolicy` | [docs/deletion.md](docs/deletion.md) |
-| what is compared and applied on a running cluster | [docs/changes-and-drift.md](docs/changes-and-drift.md) |
-| conditions, events, logs, metrics | [docs/status-events-and-logs.md](docs/status-events-and-logs.md) |
-| `internal/cloudapi`, retries, error classes | [docs/calling-ravendb-cloud.md](docs/calling-ravendb-cloud.md) |
-| the connection Secret and the certificate | [docs/connection-secret.md](docs/connection-secret.md) |
-| CloudAccount, keys, the client cache | [docs/accounts-and-credentials.md](docs/accounts-and-credentials.md) |
-| CloudClusterRestart | [docs/restarts.md](docs/restarts.md) |
-| tests, the simulator, labs | [docs/simulator-and-tests.md](docs/simulator-and-tests.md) |
+| a validation rule, a default, a new spec field | [docs/how-it-works/validation-and-defaults.md](docs/how-it-works/validation-and-defaults.md), then CONTRIBUTING's checklist |
+| how a cluster is found, taken over or created | [docs/how-it-works/identity-and-takeover.md](docs/how-it-works/identity-and-takeover.md) |
+| deletion, the finalizer, `deletionPolicy` | [docs/how-it-works/deletion.md](docs/how-it-works/deletion.md) |
+| what is compared and applied on a running cluster | [docs/how-it-works/changes-and-drift.md](docs/how-it-works/changes-and-drift.md) |
+| conditions, events, logs, metrics | [docs/how-it-works/status-events-and-logs.md](docs/how-it-works/status-events-and-logs.md) |
+| `internal/cloudapi`, retries, error classes | [docs/how-it-works/calling-ravendb-cloud.md](docs/how-it-works/calling-ravendb-cloud.md) |
+| the connection Secret and the certificate | [docs/how-it-works/connection-secret.md](docs/how-it-works/connection-secret.md) |
+| CloudAccount, keys, the client cache | [docs/how-it-works/accounts-and-credentials.md](docs/how-it-works/accounts-and-credentials.md) |
+| CloudClusterRestart | [docs/how-it-works/restarts.md](docs/how-it-works/restarts.md) |
+| tests, the simulator, labs | [docs/how-it-works/simulator-and-tests.md](docs/how-it-works/simulator-and-tests.md) |
 
 `SECURITY.md` holds the security model, `CONTRIBUTING.md` the mechanics.
 

@@ -1,8 +1,9 @@
 # Contributing
 
 Thanks for looking. This file is the mechanics of working on the code. How each
-part of the operator works, and why, is in [`docs/`](docs/), one file per
-mechanism; read the one for the part you are changing.
+part of the operator works, and why, is in
+[`docs/how-it-works/`](docs/how-it-works/), starting with the architecture;
+read the file for the part you are changing.
 
 ## What you need
 
@@ -17,11 +18,21 @@ The labs and `make test-e2e` also need `kubectl` and
 
 | Command | What it runs | Time |
 |---|---|---|
-| `make test` | unit tests under `-race`, then the CRD tests against a real API server | seconds |
+| `make test` | `test-unit` under `-race`, then `test-integration`: no cluster and no account needed | seconds |
+| `make test-unit` | pure Go: wire mapping, retries, controller logic against the simulator | seconds |
+| `make test-integration` | CEL rules and defaults against a real API server (envtest) | seconds |
+| `make test-e2e` | the operator as a container in a kind cluster, through the labs | minutes |
+| `make test-chart-install` | the Helm chart installed into that cluster, scoped to one namespace | minutes |
+| `make test-e2e-cloud` | against a real RavenDB Cloud account; needs a key and costs money | minutes |
 | `make lint` | golangci-lint, as CI runs it | seconds |
 | `make generate manifests` | deepcopy, CRDs and RBAC from the markers; run after touching `api/v1alpha1/` | seconds |
-| `make chart-sync` | copy the generated CRDs and RBAC into the Helm chart | seconds |
-| `labs/run_all.sh --setup` | the operator in a kind cluster, against the simulator | minutes |
+| `make chart-sync`, `make chart-lint` | copy the generated CRDs and RBAC into the chart; check it matches, lints and renders | seconds |
+| `make build`, `make docker-build` | the manager and the kubectl plugin into `bin/`; the image | seconds |
+| `make deploy`, `make hooks` | CRDs, RBAC and the manager via kustomize; the pre-commit checks | seconds |
+
+`api/v1alpha1` reports `ok` with every test skipped when the envtest binaries are
+absent, so `make test-unit` says so out loud; run `make test-integration` to
+actually exercise the CRDs.
 
 CI runs the tests, the linter, the chart checks, a vulnerability scan and the
 labs on every pull request.
@@ -34,7 +45,7 @@ sure it reaches all of them.
 1. **The type**, in `api/v1alpha1/cloudcluster_types.go`, with a generous doc
    comment: it is what `kubectl explain` shows. Validation that needs only the
    object goes here as markers or CEL, with a case in
-   `crd_validation_test.go`. [validation-and-defaults.md](docs/validation-and-defaults.md)
+   `crd_validation_test.go`. [validation-and-defaults.md](docs/how-it-works/validation-and-defaults.md)
    says where every other kind of rule goes.
 2. **A default**, if it has one: static in a marker, dynamic in
    `internal/controller/defaults.go`, read everywhere through an `Effective*`
@@ -42,7 +53,7 @@ sure it reaches all of them.
 3. **The create request**, in `buildCreateRequest` and, if RavenDB Cloud takes
    it, `cloudapi.CreateClusterRequest`, `wire.go` and the simulator.
 4. **Drift**, in `shapeDifferences`: one difference, applied or reported. See
-   [changes-and-drift.md](docs/changes-and-drift.md).
+   [changes-and-drift.md](docs/how-it-works/changes-and-drift.md).
 5. **Status**, if it is observed, in `applyObservedState`.
 6. **The export**, in `internal/export`, so an exported manifest still changes
    nothing when applied.
@@ -69,13 +80,13 @@ Add the constant in `api/v1alpha1` beside the others for that condition, add it
 to its table in `internal/controller/conditions.go`, which decides its status,
 its event and whether it stalls, and document it in the condition's comment on
 the status type. Set it through `ready`, `synced` or `complete`, never directly.
-See [status-events-and-logs.md](docs/status-events-and-logs.md).
+See [status-events-and-logs.md](docs/how-it-works/status-events-and-logs.md).
 
 ## Tests or a lab
 
 A lab shows what only a real cluster can: RBAC, the image, a pod mounting the
 connection Secret, deletion order. Everything else is a test, at the cheapest
-level that can see it. [simulator-and-tests.md](docs/simulator-and-tests.md)
+level that can see it. [simulator-and-tests.md](docs/how-it-works/simulator-and-tests.md)
 says which.
 
 ## Claims about the RavenDB Cloud API

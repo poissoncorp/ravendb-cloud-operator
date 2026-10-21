@@ -27,7 +27,7 @@ One cluster binds to one CloudCluster. `holderOf` looks the product id up
 through a field index across every namespace the operator watches; a second
 object finding a held cluster reports `NameTaken` naming the first. Two
 Kubernetes clusters running this operator against one account cannot see each
-other's objects. That risk is accepted; the README says why.
+other's objects. That risk is accepted; [architecture.md](architecture.md) says why.
 
 ## creationMode
 
