@@ -99,8 +99,19 @@ helm repo add ravendb-cloud-operator https://ravendb.github.io/ravendb-cloud-ope
 helm install ravendb-cloud-operator ravendb-cloud-operator/ravendb-cloud-operator \
   --version <version> --namespace ravendb-cloud-operator-system --create-namespace
 kubectl create namespace apps
-kubectl apply -f examples/00-account.yaml    # edit the API key first
+read -rsp 'RavenDB Cloud API key: ' key && echo
+kubectl -n apps create secret generic ravendb-cloud-api-key --from-literal=apiKey="$key"
+unset key
+kubectl apply -f examples/00-account.yaml    # set allowedIPs to your addresses first
 kubectl apply -f examples/01-provision-minimal.yaml
+```
+
+The cluster is billed from then on. Deleting the object leaves it running, since `Retain` is
+the default; to end it, have the object terminate it on the way out:
+
+```bash
+kubectl -n apps patch cloudcluster orders-dev --type=merge -p '{"spec":{"deletionPolicy":"Terminate"}}'
+kubectl -n apps delete cloudcluster orders-dev
 ```
 
 No release has been published yet, so until one is, build the image and install the chart from

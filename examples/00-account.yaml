@@ -3,16 +3,15 @@
 # A CloudAccount is the one object that holds a RavenDB Cloud API key. Every
 # CloudCluster points at one. Put the defaults your team shares here, so the
 # cluster manifests stay down to what actually differs between them.
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ravendb-cloud-api-key
-  namespace: apps
-type: Opaque
-stringData:
-  # Create this in the RavenDB Cloud portal under Account -> API Keys.
-  apiKey: "REPLACE_ME"
+#
+# The key itself is not in this file, so it never lands in git. Create it in
+# the RavenDB Cloud portal under Account -> API Keys, then put it in a Secret,
+# typed at a prompt rather than on the command line, so it stays out of shell
+# history too:
+#
+#   read -rsp 'RavenDB Cloud API key: ' key && echo
+#   kubectl -n apps create secret generic ravendb-cloud-api-key --from-literal=apiKey="$key"
+#   unset key
 ---
 apiVersion: cloud.ravendb.net/v1alpha1
 kind: CloudAccount
@@ -30,14 +29,15 @@ spec:
     provider: AWS
     region: eu-central-1
     releaseChannel: Stable72
-    # Open to the internet, which is convenient for a first look and wrong for
-    # anything real. The operator emits a Warning event when it creates a
-    # cluster with this, rather than refusing it, because a lab and some
-    # networks legitimately need it. Narrow it to your egress ranges before
-    # this account creates anything you care about: RavenDB Cloud accepts the
-    # list at creation only, so widening it later means the portal.
+    # Who may connect to the clusters, as CIDR ranges: replace this example
+    # range with the addresses your applications and you connect from. For
+    # just your own machine, `curl -s https://checkip.amazonaws.com` prints
+    # the address to write as <address>/32. RavenDB Cloud takes the list at
+    # creation only, so changing it later means the portal. 0.0.0.0/0 opens
+    # the cluster to the internet; the operator accepts it with a Warning
+    # event, for labs.
     allowedIPs:
-      - 0.0.0.0/0
+      - 203.0.113.0/24
 
 # After applying, the operator verifies the key and mirrors the regions and
 # release channels you can order into status:
