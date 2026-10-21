@@ -106,15 +106,16 @@ func (r *CloudClusterReconciler) takeOver(
 	// would leave this object reporting DeletedInCloud for good.
 	if observed.Status == cloudapi.StatusTerminating {
 		return r.notBound(ctx, cluster, fmt.Sprintf(
-			"RavenDB Cloud cluster %q (%s) is being terminated, so this object was not bound to it. A terminated "+
-				"cluster keeps its name until it is hidden in the RavenDB Cloud portal: hide it there once it is "+
-				"terminated, or delete this object and apply it again with another displayName.", ref.Name, ref.ID))
+			"RavenDB Cloud cluster %q (%s) is being terminated, so this object was not bound to it. One this "+
+				"operator terminates gives up its name once termination completes, and this object looks again "+
+				"every %s; one terminated in the portal keeps its name until it is hidden there. To use another "+
+				"name now, set spec.displayName.", ref.Name, ref.ID, cluster.EffectivePollInterval()))
 	}
 	if differs := identityDifferences(&cluster.Spec, observed); len(differs) > 0 {
 		return r.notBound(ctx, cluster, fmt.Sprintf(
 			"A RavenDB Cloud cluster named %q exists, but %s, so this object was not bound to it and nothing was "+
-				"changed. Those fields cannot be edited, so delete this object and apply it again: with another "+
-				"displayName to create a new cluster, or with the cluster's own values to manage that one.",
+				"changed. Set spec.displayName to another name to create a new cluster, or those fields to the "+
+				"cluster's own values to manage that one.",
 			ref.Name, strings.Join(differs, ", and ")))
 	}
 
@@ -129,8 +130,8 @@ func (r *CloudClusterReconciler) takeOver(
 	if cluster.EffectiveCreationMode() == v1alpha1.CreationCreateOnly {
 		return r.notBound(ctx, cluster, fmt.Sprintf(
 			"A RavenDB Cloud cluster named %q (%s) already exists, and creationMode CreateOnly never takes one over, "+
-				"so this object was not bound and nothing was changed. Delete this object and apply it again: with "+
-				"another displayName to create a new cluster, or with creationMode TakeOverOnly to manage that one.",
+				"so this object was not bound and nothing was changed. Set spec.displayName to another name to create "+
+				"a new cluster, or spec.creationMode to TakeOverOnly to manage that one.",
 			ref.Name, ref.ID))
 	}
 
@@ -145,10 +146,20 @@ func (r *CloudClusterReconciler) takeOver(
 	// object now publishes the found cluster's certificate.
 	emit(r.Recorder, cluster, corev1.EventTypeWarning, v1alpha1.EventAdopted,
 		"Found RavenDB Cloud cluster %q (%s) already running and took it over; %s. Nothing in the manifest asked "+
-			"for an existing cluster: set spec.creationMode to TakeOverOnly to confirm this one is meant, or delete "+
-			"this object, which leaves the cluster as it is, and apply it again with another displayName.",
-		ref.Name, ref.ID, howManaged(cluster))
+			"for an existing cluster: set spec.creationMode to TakeOverOnly to confirm this one is meant. %s",
+		ref.Name, ref.ID, howManaged(cluster), notMeantWayOut(cluster))
 	return ref.ID, ctrl.Result{}, nil
+}
+
+// notMeantWayOut says how to let go of a cluster taken over by mistake. Under
+// Terminate the plain way out, deleting the object, would end the cluster.
+func notMeantWayOut(cluster *v1alpha1.CloudCluster) string {
+	if cluster.EffectiveDeletionPolicy() == v1alpha1.DeletionTerminate {
+		return "If it is not, set spec.deletionPolicy to Retain before deleting this object: deletionPolicy is " +
+			"Terminate, so deleting it now terminates that cluster."
+	}
+	return "If it is not, delete this object, which leaves the cluster as it is, and apply it again with another " +
+		"displayName."
 }
 
 // howManaged says what a found cluster is managed with, and how to change it
@@ -217,14 +228,13 @@ func (r *CloudClusterReconciler) createUnlessForbidden(
 	case cluster.EffectiveCreationMode() == v1alpha1.CreationTakeOverOnly:
 		r.ready(ctx, cluster, v1alpha1.ReasonClusterNotFound, fmt.Sprintf(
 			"No RavenDB Cloud cluster named %q in this account, and creationMode TakeOverOnly never creates one. "+
-				"If the name is wrong, delete this object and apply it again with the right spec.displayName; "+
-				"nothing was created.", name))
+				"If the name is wrong, correct spec.displayName; nothing was created.", name))
 		return "", poll, nil
 	case cluster.Spec.ManagementPolicy == v1alpha1.ManagementObserve:
 		r.ready(ctx, cluster, v1alpha1.ReasonClusterNotFound, fmt.Sprintf(
 			"No RavenDB Cloud cluster named %q in this account, and managementPolicy Observe never creates one. "+
-				"Set spec.managementPolicy to Full to create it. If the name is wrong, delete this object and apply it "+
-				"again with the right spec.displayName; nothing was created.", name))
+				"Set spec.managementPolicy to Full to create it. If the name is wrong, correct spec.displayName; "+
+				"nothing was created.", name))
 		return "", poll, nil
 	case cluster.Spec.Tier == v1alpha1.TierFree:
 		// The public API refuses to create a Free product.
@@ -327,9 +337,6 @@ func buildCreateRequest(
 	if err := validateAllowedIPs(where.provider, where.allowedIPs); err != nil {
 		return empty, err
 	}
-	if err := validateDisplayName(displayName); err != nil {
-		return empty, err
-	}
 
 	// The OpenAPI document marks subdomainName nullable, but RavenDB Cloud's
 	// domain-name validator rejects an empty one, so it is derived when unset.
@@ -417,7 +424,7 @@ func placementFor(cluster *v1alpha1.CloudCluster, account *v1alpha1.CloudAccount
 			return empty, err
 		}
 	} else if err := validateRegion(account, provider, region, "spec.region"); err != nil {
-		return empty, fmt.Errorf("%w. spec.region cannot be changed once set, so delete this object and apply it again with one of those; nothing was created", err)
+		return empty, fmt.Errorf("%w. Set spec.region to one of those; nothing was created", err)
 	}
 
 	channel := cmp.Or(spec.ReleaseChannel, defaults.ReleaseChannel, account.Status.DefaultReleaseChannel)

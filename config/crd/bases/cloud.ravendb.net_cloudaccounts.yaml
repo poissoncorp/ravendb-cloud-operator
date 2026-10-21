@@ -131,17 +131,19 @@ spec:
                 maxLength: 2048
                 pattern: ^https?://[^@?#]+$
                 type: string
-              refreshInterval:
-                default: 1h
+              refreshIntervalSeconds:
+                default: 3600
                 description: |-
-                  RefreshInterval is how often the operator re-reads the region and
-                  release channel lists held in status.providers and
-                  status.releaseChannels. Defaults to one hour, because the lists rarely
-                  change.
+                  RefreshIntervalSeconds is how often, in seconds, the operator re-reads
+                  the region and release channel lists held in status.providers and
+                  status.releaseChannels. Defaults to 3600, one hour, because the lists
+                  rarely change.
 
                   Instance types and disk offers are not covered. They are never cached,
                   and are read fresh whenever the operator creates a cluster.
-                type: string
+                format: int32
+                minimum: 60
+                type: integer
             required:
             - apiKeySecretRef
             type: object
@@ -267,7 +269,7 @@ spec:
               refreshedAt:
                 description: |-
                   RefreshedAt is when the region and release channel lists were last read
-                  from RavenDB Cloud. They are re-read every spec.refreshInterval.
+                  from RavenDB Cloud. They are re-read every spec.refreshIntervalSeconds.
                 format: date-time
                 type: string
               releaseChannels:

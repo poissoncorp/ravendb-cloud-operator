@@ -91,16 +91,17 @@ type CloudAccountSpec struct {
 	// +optional
 	Defaults *AccountDefaults `json:"defaults,omitempty"`
 
-	// RefreshInterval is how often the operator re-reads the region and
-	// release channel lists held in status.providers and
-	// status.releaseChannels. Defaults to one hour, because the lists rarely
-	// change.
+	// RefreshIntervalSeconds is how often, in seconds, the operator re-reads
+	// the region and release channel lists held in status.providers and
+	// status.releaseChannels. Defaults to 3600, one hour, because the lists
+	// rarely change.
 	//
 	// Instance types and disk offers are not covered. They are never cached,
 	// and are read fresh whenever the operator creates a cluster.
-	// +kubebuilder:default="1h"
+	// +kubebuilder:default=3600
+	// +kubebuilder:validation:Minimum=60
 	// +optional
-	RefreshInterval *metav1.Duration `json:"refreshInterval,omitempty"`
+	RefreshIntervalSeconds *int32 `json:"refreshIntervalSeconds,omitempty"`
 }
 
 // ProviderRegions is the set of regions available for one provider.
@@ -181,7 +182,7 @@ type CloudAccountStatus struct {
 	// cheap call, while re-reading the lists costs four.
 
 	// RefreshedAt is when the region and release channel lists were last read
-	// from RavenDB Cloud. They are re-read every spec.refreshInterval.
+	// from RavenDB Cloud. They are re-read every spec.refreshIntervalSeconds.
 	// +optional
 	RefreshedAt *metav1.Time `json:"refreshedAt,omitempty"`
 }

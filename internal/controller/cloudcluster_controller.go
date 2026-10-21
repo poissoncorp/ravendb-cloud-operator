@@ -97,6 +97,10 @@ func (r *CloudClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.finish(ctx, original, &cluster, result, err)
 	}
 
+	if inAnotherAccount(&cluster, account) {
+		return r.reportAnotherAccount(ctx, original, &cluster, account)
+	}
+
 	if !cluster.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, original, &cluster, cloud)
 	}
@@ -114,12 +118,9 @@ func (r *CloudClusterReconciler) resolveAccount(ctx context.Context, cluster *v1
 		return nil, nil, ctrl.Result{}, err
 	case wait == nil:
 		return account, cloud, ctrl.Result{}, nil
-	case wait.keyMissing && !cluster.DeletionTimestamp.IsZero():
-		// Deleting the Secret together with the account and its clusters is
-		// an ordinary teardown, and the client built before still holds the
-		// key a Terminate needs.
-		if last, ok := r.Clients.LastFor(account); ok {
-			return account, last, ctrl.Result{}, nil
+	case account != nil && !cluster.DeletionTimestamp.IsZero():
+		if cloud, ok := r.clientForDeletion(ctx, account); ok {
+			return account, cloud, ctrl.Result{}, nil
 		}
 	}
 
@@ -131,12 +132,58 @@ func (r *CloudClusterReconciler) resolveAccount(ctx context.Context, cluster *v1
 	return nil, nil, ctrl.Result{RequeueAfter: pendingRequeue}, nil
 }
 
+// clientForDeletion is the client a deletion terminates with. It does not wait
+// for the account to be Ready: a key RavenDB Cloud no longer accepts shows up
+// as a failed terminate, which says so. A teardown deletes the key Secret along
+// with everything else and in no particular order, so when the Secret is gone,
+// the client built from it before still holds the key.
+func (r *CloudClusterReconciler) clientForDeletion(ctx context.Context, account *v1alpha1.CloudAccount) (cloudapi.Client, bool) {
+	if cloud, err := r.Clients.ClientFor(ctx, account); err == nil {
+		return cloud, true
+	}
+	return r.Clients.LastFor(account)
+}
+
+// inAnotherAccount reports whether the account's key now answers for a
+// different RavenDB Cloud account than the one this object's cluster is in.
+func inAnotherAccount(cluster *v1alpha1.CloudCluster, account *v1alpha1.CloudAccount) bool {
+	return cluster.Status.AccountDomain != "" && account.Status.DomainName != "" &&
+		!strings.EqualFold(cluster.Status.AccountDomain, account.Status.DomainName)
+}
+
+// reportAnotherAccount stops at a key for the wrong account. In that account a
+// read finds no cluster and a terminate ends nothing, so acting on either
+// would report a running cluster deleted, or let one go on billing after its
+// object is gone.
+func (r *CloudClusterReconciler) reportAnotherAccount(
+	ctx context.Context, original, cluster *v1alpha1.CloudCluster, account *v1alpha1.CloudAccount,
+) (ctrl.Result, error) {
+	message := fmt.Sprintf(
+		"RavenDB Cloud cluster %s is in account %s, but CloudAccount %q now holds a key for account %s, so the "+
+			"operator leaves the cluster alone. Put a key for %s back in the Secret that account's "+
+			"spec.apiKeySecretRef names.",
+		cluster.Status.ProductID, cluster.Status.AccountDomain, account.Name, account.Status.DomainName,
+		cluster.Status.AccountDomain)
+	poll := ctrl.Result{RequeueAfter: cluster.EffectivePollInterval()}
+
+	if cluster.DeletionTimestamp.IsZero() {
+		r.ready(ctx, cluster, v1alpha1.ReasonWaitingForAccount, message)
+		return r.finish(ctx, original, cluster, poll, nil)
+	}
+	if nothingToTerminate(cluster) {
+		return r.releaseFinalizer(ctx, cluster)
+	}
+	r.deletionStuck(ctx, cluster, message+" Or set spec.deletionPolicy to Retain to let this object go and leave "+
+		"the cluster running.")
+	return r.finish(ctx, original, cluster, poll, nil)
+}
+
 // missingAccountWayOut says what a missing CloudAccount means for this object.
 // accountRef cannot be edited, so before anything was created the way out of a
 // typo is to apply the object again.
 func missingAccountWayOut(cluster *v1alpha1.CloudCluster) string {
 	if cluster.Status.ProductID == "" {
-		return "If the name is wrong, delete this object and apply it again with the right spec.accountRef; nothing was created."
+		return "If the name is wrong, correct spec.accountRef; nothing was created."
 	}
 	return "The cluster keeps running, and the operator picks it up again once the account exists."
 }
@@ -162,7 +209,7 @@ func (r *CloudClusterReconciler) reconcileNormal(
 	if err != nil || productID == "" {
 		return r.finish(ctx, original, cluster, result, err)
 	}
-	r.recordBinding(ctx, cluster, productID)
+	r.recordBinding(ctx, cluster, account, productID)
 
 	observed, err := cloud.GetCluster(ctx, productID)
 	if err != nil {
@@ -193,15 +240,20 @@ func (r *CloudClusterReconciler) reconcileNormal(
 	return r.finish(ctx, original, cluster, result, err)
 }
 
-// recordBinding stores the cloud identity this object just acquired, and the
-// policy that identity decides.
-func (r *CloudClusterReconciler) recordBinding(ctx context.Context, cluster *v1alpha1.CloudCluster, productID string) {
+// recordBinding stores the cloud identity this object just acquired, the
+// account it lives in, and the policy that identity decides.
+func (r *CloudClusterReconciler) recordBinding(
+	ctx context.Context, cluster *v1alpha1.CloudCluster, account *v1alpha1.CloudAccount, productID string,
+) {
 	if cluster.Status.ProductID == "" {
 		log.FromContext(ctx).Info("bound to a RavenDB Cloud cluster",
 			"productID", productID, "adopted", cluster.Status.Adopted,
 			"policy", cluster.EffectiveManagementPolicy())
 	}
 	cluster.Status.ProductID = productID
+	if account.Status.DomainName != "" {
+		cluster.Status.AccountDomain = account.Status.DomainName
+	}
 	cluster.Status.ManagementPolicy = cluster.EffectiveManagementPolicy()
 }
 
@@ -490,16 +542,13 @@ func (r *CloudClusterReconciler) createFailure(ctx context.Context, cluster *v1a
 		return ctrl.Result{RequeueAfter: quotaRetryInterval}, nil
 	}
 
-	// Not "until the spec changes": a create is judged on fields the CRD marks
-	// immutable, so that would name a fix the API server refuses.
 	message := sentence("RavenDB Cloud refused to create this cluster: " + cloudSaid(err))
 	if refusedField(err, "displayName") {
 		// The lookup found no live cluster, so a terminated one holds the name.
 		message += " A terminated cluster keeps its name until it is hidden in the RavenDB Cloud portal."
 	}
-	message += " This is not retried on a timer; the operator acts again when the object changes. " +
-		"Most spec fields cannot change once set, so a refusal naming one of those needs the object deleted and " +
-		"applied again; nothing was created."
+	message += " Nothing was created, so every spec field can still be changed. This is not retried on a timer; " +
+		"the operator tries again when the object changes."
 	r.ready(ctx, cluster, v1alpha1.ReasonRefused, message)
 	return ctrl.Result{}, nil
 }

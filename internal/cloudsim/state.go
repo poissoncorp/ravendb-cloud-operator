@@ -28,10 +28,11 @@ type Cluster struct {
 	Iops           *int32
 	Throughput     *float64
 
-	// HiddenInPortal is set by a terminate that asked for it, and is the only
-	// thing that takes a product out of the list: prod filters the list on it
-	// alone, never on status.
-	HiddenInPortal bool
+	// HiddenInPortal is set once a terminate that asked for it completes, and
+	// is the only thing that takes a product out of the list: prod filters the
+	// list on it alone, never on status.
+	HiddenInPortal     bool
+	hideWhenTerminated bool
 
 	// storageChangedAt starts RavenDB Cloud's storage change window.
 	storageChangedAt time.Time
@@ -132,8 +133,9 @@ func (s *State) settle() {
 			c.Status = statusActive
 		case statusTerminating:
 			// The record survives, display name and all: prod sets the status
-			// and keeps the product.
+			// and keeps the product, hiding it only if the terminate asked.
 			c.Status = statusTerminated
+			c.HiddenInPortal = c.HiddenInPortal || c.hideWhenTerminated
 		}
 		c.settleAt = time.Time{}
 	}
@@ -618,7 +620,8 @@ func (s *State) RestartNode(id, tag string) error {
 }
 
 // Terminate starts a termination. The record survives it as Terminated;
-// hideInPortal only takes the product out of the list.
+// hideInPortal takes the product out of the list once it is, as in prod, so
+// the name stays taken while it is still Terminating.
 func (s *State) Terminate(id string, hideInPortal bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -632,7 +635,7 @@ func (s *State) Terminate(id string, hideInPortal bool) error {
 		return errAlreadyTerminated
 	}
 	c.Status = statusTerminating
-	c.HiddenInPortal = hideInPortal
+	c.hideWhenTerminated = hideInPortal
 	c.settleAt = s.now().Add(s.changeDuration)
 	return nil
 }

@@ -33,9 +33,9 @@ ALL_OBJECTS="$LEGACY $SECOND $WRONG_TIER $NOT_THERE $AMBIGUOUS $SEED"
 # has nothing to seed into, so there the lab makes its own predecessor from the
 # smallest Development shape, which is also the cheapest to reshape.
 if on_mock; then
-  TIER=Production; OTHER_TIER=Development; SMALL=PB10; BIG=PB20; POLL=5s
+  TIER=Production; OTHER_TIER=Development; SMALL=PB10; BIG=PB20; POLL=5
 else
-  TIER=Development; OTHER_TIER=Production; SMALL=Dev10; BIG=Dev20; POLL=30s
+  TIER=Development; OTHER_TIER=Production; SMALL=Dev10; BIG=Dev20; POLL=30
 fi
 
 # --- helpers ----------------------------------------------------------------
@@ -257,7 +257,7 @@ spec:
     name: ravendb-cloud
   tier: $TIER
   instanceType: $BIG
-  pollInterval: $POLL   # lab only, so each step below settles quickly
+  pollIntervalSeconds: $POLL   # lab only, so each step below settles quickly
 YAML
 
 wait_for_changes "$LEGACY" NotApplied 90 || { warn "recent operator logs:"; operator_logs 30; }
@@ -293,7 +293,7 @@ spec:
     name: ravendb-cloud
   tier: $TIER
   instanceType: $BIG
-  pollInterval: $POLL
+  pollIntervalSeconds: $POLL
   managementPolicy: Full
 YAML
 
