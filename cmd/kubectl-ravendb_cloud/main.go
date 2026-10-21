@@ -33,15 +33,17 @@ import (
 	"github.com/ravendb/ravendb-cloud-operator/internal/cloudapi"
 	"github.com/ravendb/ravendb-cloud-operator/internal/cloudclients"
 	"github.com/ravendb/ravendb-cloud-operator/internal/export"
+	"github.com/ravendb/ravendb-cloud-operator/internal/version"
 )
 
 // apiKeyEnvVar holds a key to use instead of the account's Secret. Not a flag,
 // so it stays out of shell history and process listings.
 const apiKeyEnvVar = "RAVENDB_CLOUD_API_KEY"
 
-const userAgent = "kubectl-ravendb-cloud"
+var userAgent = "kubectl-ravendb-cloud/" + version.Version
 
-const usage = "kubectl ravendb-cloud export --account NAME [-n NAMESPACE] (--all | DISPLAY-NAME...)"
+const usage = "kubectl ravendb-cloud export --account NAME [-n NAMESPACE] (--all | DISPLAY-NAME...)\n" +
+	"       kubectl ravendb-cloud version"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -57,6 +59,10 @@ func main() {
 type connect func() (client.Client, string, error)
 
 func run(ctx context.Context, args []string, getenv func(string) string, stdout io.Writer, connect connect) error {
+	if len(args) == 1 && args[0] == "version" {
+		_, err := fmt.Fprintln(stdout, version.Version)
+		return err
+	}
 	if len(args) == 0 || args[0] != "export" {
 		return errors.New("usage: " + usage)
 	}

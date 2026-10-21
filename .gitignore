@@ -27,3 +27,6 @@ tmp/
 
 # hack/cloud-drift configuration: names the private RavenDB Cloud source.
 .cloud-drift.env
+
+# Release output: dist/install.yaml, built by make build-installer.
+dist/

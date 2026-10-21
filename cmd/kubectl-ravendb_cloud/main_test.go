@@ -17,6 +17,7 @@ import (
 	"github.com/ravendb/ravendb-cloud-operator/api/v1alpha1"
 	"github.com/ravendb/ravendb-cloud-operator/internal/cloudapi"
 	"github.com/ravendb/ravendb-cloud-operator/internal/cloudsim"
+	"github.com/ravendb/ravendb-cloud-operator/internal/version"
 )
 
 // noCluster is a kubeconfig that leads nowhere, for the paths that must not
@@ -148,4 +149,15 @@ func clusterWith(t *testing.T, objects ...client.Object) client.Client {
 		t.Fatal(err)
 	}
 	return k8sfake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+}
+
+// The version a bug report quotes has to be the one that was built.
+func TestVersionPrintsTheStampedVersion(t *testing.T) {
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"version"}, func(string) string { return "" }, &out, noCluster); err != nil {
+		t.Fatalf("version: %v", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != version.Version {
+		t.Errorf("printed %q, want %q", got, version.Version)
+	}
 }

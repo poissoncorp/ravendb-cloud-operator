@@ -29,11 +29,12 @@ import (
 	"github.com/ravendb/ravendb-cloud-operator/internal/cloudapi"
 	"github.com/ravendb/ravendb-cloud-operator/internal/cloudclients"
 	"github.com/ravendb/ravendb-cloud-operator/internal/controller"
+	"github.com/ravendb/ravendb-cloud-operator/internal/version"
 )
 
-// userAgent identifies this operator in RavenDB Cloud audit logs, which log
-// every API call.
-const userAgent = "ravendb-cloud-operator"
+// userAgent names this operator and its version on every request to RavenDB
+// Cloud.
+var userAgent = "ravendb-cloud-operator/" + version.Version
 
 var (
 	scheme   = runtime.NewScheme()
@@ -67,6 +68,7 @@ type config struct {
 	leaderElection bool
 	secureMetrics  bool
 	watchNamespace string
+	printVersion   bool
 }
 
 // bootstrap declares every flag, parses the command line, and installs the
@@ -80,15 +82,16 @@ func bootstrap() config {
 		"Address the metrics endpoint binds to. Use 0 to disable.")
 	flag.StringVar(&cfg.probeAddr, "health-probe-bind-address", ":8081",
 		"Address the probe endpoint binds to.")
-	// Off by default so `make run` works without lease permissions. The
-	// deployment has to turn it on: the pacing is per process, so two active
-	// managers would each call at the full pace.
+	// Off by default so a manager started by hand, outside the cluster, needs
+	// no lease permissions. The deployment has to turn it on: the pacing is
+	// per process, so two active managers would each call at the full pace.
 	flag.BoolVar(&cfg.leaderElection, "leader-elect", false,
 		"Enable leader election, so only one manager is active at a time.")
 	flag.BoolVar(&cfg.secureMetrics, "metrics-secure", true,
 		"Serve metrics over HTTPS, and require a caller to authenticate.")
 	flag.StringVar(&cfg.watchNamespace, "watch-namespace", "",
 		"Restrict the operator to one namespace. Empty means all namespaces.")
+	flag.BoolVar(&cfg.printVersion, "version", false, "Print the version and exit.")
 
 	logOpts := logDefaults()
 	logOpts.BindFlags(flag.CommandLine)
@@ -112,6 +115,10 @@ func logDefaults() zap.Options {
 // return means a clean shutdown.
 func run() error {
 	cfg := bootstrap()
+	if cfg.printVersion {
+		fmt.Println(version.Version)
+		return nil
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions(cfg))
 	if err != nil {
