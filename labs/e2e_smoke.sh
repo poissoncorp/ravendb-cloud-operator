@@ -227,6 +227,17 @@ if [ "$MODE" = operator ]; then
 
   # Belt and braces: refuse to proceed if anything in the namespace could
   # reconcile into a write against the real endpoint.
+  # The account names no endpoint, so the operator's own setting decides where
+  # it goes; it has to be the one this script just read.
+  OPERATOR_ENDPOINT="$(kubectl -n "$LAB_OPERATOR_NAMESPACE" get deploy ravendb-cloud-operator-controller-manager \
+    -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RAVENDB_CLOUD_ENDPOINT")].value}' 2>/dev/null)"
+  if [ "${OPERATOR_ENDPOINT:-https://api.cloud.ravendb.net}" != "$ENDPOINT" ]; then
+    warn "the operator in this cluster calls ${OPERATOR_ENDPOINT:-https://api.cloud.ravendb.net}, not $ENDPOINT."
+    warn "Refusing to run --operator: it would verify the key against the wrong control plane."
+    lab_summary
+    exit 1
+  fi
+
   EXISTING="$(kubectl -n "$LAB_NAMESPACE" get cloudcluster --no-headers 2>/dev/null | wc -l | tr -d '[:space:]')"
   if [ "${EXISTING:-0}" != "0" ]; then
     warn "$EXISTING CloudCluster(s) exist in namespace $LAB_NAMESPACE."
@@ -244,7 +255,6 @@ kind: CloudAccount
 metadata:
   name: $SMOKE_ACCOUNT
 spec:
-  endpoint: $ENDPOINT
   apiKeySecretRef:
     name: $SMOKE_SECRET
     key: apiKey

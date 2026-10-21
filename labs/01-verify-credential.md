@@ -26,7 +26,6 @@ spec:
   apiKeySecretRef:
     name: lab01-api-key
     key: apiKey                  # the default, spelled out for the failure below
-  endpoint: http://mockcloud.ravendb-cloud-lab.svc.cluster.local
   defaults:
     provider: AWS
     region: eu-central-1

@@ -67,46 +67,6 @@ func TestAccountsShareOneRateLimiter(t *testing.T) {
 	}
 }
 
-// TestSpecEndpointOutranksTheOperatorWide: an account that names its own
-// control plane keeps it whatever the operator was started with, and one that
-// names none, or only spaces, follows the operator.
-func TestSpecEndpointOutranksTheOperatorWide(t *testing.T) {
-	answering := func(hits *int) *httptest.Server {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			*hits++
-			_, _ = w.Write([]byte(`{"domainName":"acme.ravendb.cloud"}`))
-		}))
-		t.Cleanup(server.Close)
-		return server
-	}
-	var operatorWide, pinned int
-	cache := newTestCache(t, answering(&operatorWide).URL, rate.Inf)
-	pinnedURL := answering(&pinned).URL
-
-	for _, tc := range []struct {
-		endpoint string
-		want     *int
-	}{
-		{pinnedURL, &pinned},
-		{"", &operatorWide},
-		{"   ", &operatorWide},
-	} {
-		account := testAccount("acct")
-		account.Spec.Endpoint = tc.endpoint
-		client, err := cache.ClientFor(context.Background(), account)
-		if err != nil {
-			t.Fatalf("ClientFor(%q): %v", tc.endpoint, err)
-		}
-		before := *tc.want
-		if _, err := client.GetAccountInfo(context.Background()); err != nil {
-			t.Fatalf("GetAccountInfo: %v", err)
-		}
-		if *tc.want != before+1 {
-			t.Errorf("spec.endpoint %q: the call went to the wrong control plane", tc.endpoint)
-		}
-	}
-}
-
 func newTestCache(t *testing.T, endpoint string, limit rate.Limit) *Cache {
 	t.Helper()
 	scheme := runtime.NewScheme()

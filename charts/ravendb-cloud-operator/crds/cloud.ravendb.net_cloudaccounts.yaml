@@ -126,11 +126,6 @@ spec:
                       RavenDB Cloud.
                     type: string
                 type: object
-              endpoint:
-                description: Endpoint is for development only. Leave it unset.
-                maxLength: 2048
-                pattern: ^https?://[^@?#]+$
-                type: string
               refreshIntervalSeconds:
                 default: 3600
                 description: |-

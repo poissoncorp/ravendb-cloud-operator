@@ -10,8 +10,11 @@
 
 **A RavenDB Cloud API key.** A `CloudAccount` names a Secret holding it. The
 operator reads it when it builds a client, keeps it in memory, sends it only as
-the `X-Api-Key` header, and never writes it to status, events or logs; a log
-line names a key only by a short hash. A key reaches every cluster in its
+the `X-Api-Key` header to RavenDB Cloud, and never writes it to status, events
+or logs; a log line names a key only by a short hash. No field of a
+CloudAccount can send it anywhere else, because the Secret it names could hold
+anything: an account that chose its own destination would let whoever can
+write CloudAccounts read every Secret in their namespace. A key reaches every cluster in its
 account, and RavenDB Cloud has no narrower one, so whoever may create a
 CloudCluster next to a CloudAccount can name any cluster in that account that
 no other CloudCluster holds: receive its client certificate, reshape it under

@@ -413,7 +413,7 @@ func TestACatalogueFromAnotherAccountIsNotKept(t *testing.T) {
 }
 
 // TestASpecChangeRefetchesTheCatalogue covers the other way an object moves: a
-// new spec.endpoint or a different Secret. Only the spec knows that happened,
+// different Secret. Only the spec knows that happened,
 // so a spec this catalogue was not taken for is reason enough to take it again.
 func TestASpecChangeRefetchesTheCatalogue(t *testing.T) {
 	ctx := context.Background()

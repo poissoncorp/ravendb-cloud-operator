@@ -98,7 +98,6 @@ metadata:
   namespace: $LAB_NAMESPACE
 spec:
   apiKeySecretRef: {name: ravendb-cloud-api-key, key: apiKey}
-  endpoint: http://mockcloud.$LAB_CLOUD_NAMESPACE.svc.cluster.local
 YAML
 if ! wait_for cloudaccount "$CHECK_ACCOUNT" '.status.conditions[?(@.type=="Ready")].status' True 120; then
   warn "the account did not become Ready under the chart install; recent logs:"

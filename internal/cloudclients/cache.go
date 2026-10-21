@@ -37,10 +37,9 @@ type Cache struct {
 	Kube      client.Client
 	UserAgent string
 
-	// Endpoint is the control plane for accounts whose spec.endpoint is empty.
-	// Empty means cloudapi.DefaultEndpoint. A per-object value wins, as for
-	// every other Kubernetes field: restarting the operator with another
-	// setting must not move an account somebody pinned on purpose.
+	// Endpoint is the control plane every account uses. Empty means
+	// cloudapi.DefaultEndpoint. Only whoever runs the operator sets it, never a
+	// CloudAccount: see CloudAccountSpec.
 	Endpoint string
 
 	// Pacing for every client built here. The zero value is production pacing.
@@ -87,7 +86,7 @@ func (c *Cache) ClientFor(ctx context.Context, account *v1alpha1.CloudAccount) (
 	if err != nil {
 		return nil, err
 	}
-	endpoint := cmp.Or(strings.TrimSpace(account.Spec.Endpoint), strings.TrimSpace(c.Endpoint), cloudapi.DefaultEndpoint)
+	endpoint := cmp.Or(strings.TrimSpace(c.Endpoint), cloudapi.DefaultEndpoint)
 	fingerprint := fingerprintOf(endpoint, apiKey)
 	key := types.NamespacedName{Namespace: account.Namespace, Name: account.Name}
 

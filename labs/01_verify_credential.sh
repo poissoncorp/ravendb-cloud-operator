@@ -14,10 +14,8 @@
 source "$(dirname "$0")/lib.sh"
 
 if on_cloud; then
-  LAB01_ENDPOINT="$LAB_CLOUD_ENDPOINT"
   LAB01_GOOD_KEY="$(cat "$LAB_CLOUD_API_KEY_FILE")"
 else
-  LAB01_ENDPOINT="http://mockcloud.${LAB_CLOUD_NAMESPACE}.svc.cluster.local"
   LAB01_GOOD_KEY="lab-api-key"
 fi
 # Any key the control plane will not accept. Rejection is the point, so it does
@@ -99,7 +97,6 @@ spec:
   apiKeySecretRef:
     name: lab01-api-key
     key: apiKey
-  endpoint: $LAB01_ENDPOINT
   defaults:
     provider: AWS
     region: eu-central-1
@@ -252,7 +249,6 @@ metadata:
 spec:
   apiKeySecretRef:
     name: lab01-late-key
-  endpoint: $LAB01_ENDPOINT
 YAML
 
 if ! wait_for cloudaccount lab01-late '.status.conditions[?(@.type=="Ready")].status' False 60; then
@@ -302,7 +298,6 @@ spec:
   apiKeySecretRef:
     name: lab01-api-key
     key: token
-  endpoint: $LAB01_ENDPOINT
 YAML
 
 if ! wait_for cloudaccount lab01-wrong-key '.status.conditions[?(@.type=="Ready")].status' False 60; then
@@ -398,7 +393,6 @@ metadata:
 spec:
   apiKeySecretRef:
     name: lab01-broken-key
-  endpoint: $LAB01_ENDPOINT
 ---
 apiVersion: cloud.ravendb.net/v1alpha1
 kind: CloudCluster

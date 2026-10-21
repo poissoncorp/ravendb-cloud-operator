@@ -389,13 +389,14 @@ step "Writing the manifest from the cluster itself"
 # from the Secret into the pod's environment and nowhere else.
 IMAGE="$(kubectl -n "$LAB_OPERATOR_NAMESPACE" get deploy ravendb-cloud-operator-controller-manager \
   -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)"
-ENDPOINT="$(jp cloudaccount ravendb-cloud .spec.endpoint)"
+ENDPOINT="$(kubectl -n "$LAB_OPERATOR_NAMESPACE" get deploy ravendb-cloud-operator-controller-manager \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RAVENDB_CLOUD_ENDPOINT")].value}')"
 KEY_SECRET="$(jp cloudaccount ravendb-cloud .spec.apiKeySecretRef.name)"
 KEY_NAME="$(jp cloudaccount ravendb-cloud .spec.apiKeySecretRef.key)"
 check_not_empty "the operator image" "$IMAGE"
 info "image: $IMAGE"
-# The pod reaches the same control plane the account does. Against RavenDB
-# Cloud itself the account names no endpoint and neither does the pod.
+# The pod reaches the same control plane the operator does. Against RavenDB
+# Cloud itself neither names an endpoint.
 ENV_JSON="{\"name\":\"RAVENDB_CLOUD_API_KEY\",\"valueFrom\":{\"secretKeyRef\":{\"name\":\"$KEY_SECRET\",\"key\":\"${KEY_NAME:-apiKey}\"}}}"
 [ -n "$ENDPOINT" ] && ENV_JSON="$ENV_JSON,{\"name\":\"RAVENDB_CLOUD_ENDPOINT\",\"value\":\"$ENDPOINT\"}"
 

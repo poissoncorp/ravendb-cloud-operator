@@ -1,10 +1,6 @@
-# The credential, pointed at the simulator.
-#
-# spec.endpoint is an ordinary field, which is what lets one script run
-# against either control plane. A real environment also needs names nothing
-# else on the account has taken, deadlines measured in minutes, and an
-# allowedIPs list somebody chose on purpose; LAB_TARGET=cloud in
-# labs/00_setup.sh supplies all three.
+# The credential the labs share. labs/00_setup.sh points the operator itself
+# at the simulator, so the account is the one you would write for real, with a
+# key the simulator accepts.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -26,7 +22,6 @@ spec:
     name: ravendb-cloud-api-key
     key: apiKey
 
-  endpoint: http://mockcloud.ravendb-cloud-lab.svc.cluster.local
 
   defaults:
     provider: AWS

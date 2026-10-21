@@ -44,10 +44,8 @@ LAB06_CLUSTERS=("$RETAIN" "$TERMINATE" "$ADOPT_RETAIN" "$ADOPT_TERMINATE" "$GONE
                 "$SECOND" "$TOGETHER" "$NOACCOUNT" "$NOCRED_RETAIN" "$NOCRED_TERMINATE")
 
 if on_cloud; then
-  LAB06_ENDPOINT="$LAB_CLOUD_ENDPOINT"
   LAB06_GOOD_KEY="$(cat "$LAB_CLOUD_API_KEY_FILE")"
 else
-  LAB06_ENDPOINT="http://mockcloud.${LAB_CLOUD_NAMESPACE}.svc.cluster.local"
   LAB06_GOOD_KEY="lab-api-key"
 fi
 
@@ -171,7 +169,6 @@ spec:
   apiKeySecretRef:
     name: $2
     key: apiKey
-  endpoint: $LAB06_ENDPOINT
   defaults:
     provider: AWS
     region: eu-central-1
