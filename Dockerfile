@@ -2,6 +2,7 @@
 FROM golang:1.26 AS builder
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG VERSION=dev
 
 WORKDIR /workspace
 
@@ -16,10 +17,11 @@ COPY internal/ internal/
 # The caches outlive the build, so a one-line change recompiles one package
 # rather than everything.
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o manager ./cmd \
+    LDFLAGS="-s -w -X github.com/ravendb/ravendb-cloud-operator/internal/version.Version=${VERSION}" \
  && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o kubectl-ravendb_cloud ./cmd/kubectl-ravendb_cloud
+    go build -trimpath -ldflags="${LDFLAGS}" -o manager ./cmd \
+ && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="${LDFLAGS}" -o kubectl-ravendb_cloud ./cmd/kubectl-ravendb_cloud
 
 # Distroless keeps the runtime free of a shell and a package manager. The
 # operator holds a RavenDB Cloud API key in memory, so the smaller the attack

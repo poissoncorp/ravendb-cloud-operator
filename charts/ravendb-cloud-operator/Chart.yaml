@@ -3,19 +3,49 @@ name: ravendb-cloud-operator
 description: Manage RavenDB Cloud clusters as Kubernetes objects
 type: application
 
-# version is the packaging, appVersion is the operator. They move
-# independently so a values-only change can ship without implying a new
-# operator. Both are overwritten at release time from the git tag.
+# Both follow VERSION in the Makefile: the Prepare Release workflow sets them,
+# and the chart in helm/ is packaged from what it set.
 version: 0.0.0-dev
 appVersion: 0.0.0-dev
 
 kubeVersion: ">=1.29.0-0"
 home: https://github.com/ravendb/ravendb-cloud-operator
+icon: https://raw.githubusercontent.com/ravendb/ravendb-operator/refs/heads/main/assets/logo.png
 sources:
   - https://github.com/ravendb/ravendb-cloud-operator
 keywords: [ravendb, database, cloud, operator]
+maintainers:
+  - name: ravendb
+    url: https://ravendb.net
 annotations:
-  # Level 1, Basic Install. The higher levels are about the database itself,
-  # its upgrades, backups and metrics, which the RavenDB Cloud public API does
-  # not reach.
-  operatorframework.io/capability-level: "Basic Install"
+  artifacthub.io/category: database
+  artifacthub.io/license: MIT
+  artifacthub.io/operator: "true"
+  # Basic Install. The higher levels are about the database itself, its
+  # upgrades, backups and metrics, which the RavenDB Cloud public API does not
+  # reach.
+  artifacthub.io/operatorCapabilities: Basic Install
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/ravendb/ravendb-cloud-operator/tree/main/docs/how-to-use
+    - name: RavenDB Cloud
+      url: https://cloud.ravendb.net
+  artifacthub.io/crds: |
+    - kind: CloudAccount
+      version: v1alpha1
+      name: cloudaccounts.cloud.ravendb.net
+      displayName: RavenDB Cloud account
+      description: A RavenDB Cloud API key, read from a Secret, and the defaults its clusters inherit.
+    - kind: CloudCluster
+      version: v1alpha1
+      name: cloudclusters.cloud.ravendb.net
+      displayName: RavenDB Cloud cluster
+      description: One RavenDB Cloud cluster, created or taken over by its display name, with its connection details published into a Secret.
+    - kind: CloudClusterRestart
+      version: v1alpha1
+      name: cloudclusterrestarts.cloud.ravendb.net
+      displayName: Node restart
+      description: One restart of one node of a RavenDB Cloud cluster, done once.
+  artifacthub.io/images: |
+    - name: ravendb-cloud-operator
+      image: docker.io/ravendb/ravendb-cloud-operator:0.0.0-dev

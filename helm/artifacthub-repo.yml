@@ -1,0 +1,6 @@
+# Artifact Hub reads this from the Helm repository that GitHub Pages serves
+# from this directory. The charts beside it are packaged by the Prepare Release
+# workflow; nothing here is edited by hand except this file.
+owners:
+  - name: ravendb
+    email: containers@ravendb.net
