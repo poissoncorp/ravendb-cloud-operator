@@ -1,0 +1,11 @@
+# Restart node A of orders-prod, once. It waits until the cluster is Running
+# and the operator may change it (managementPolicy Full), then runs.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudClusterRestart
+metadata:
+  name: orders-prod-restart-a
+  namespace: apps
+spec:
+  clusterRef:
+    name: orders-prod
+  nodeTag: A

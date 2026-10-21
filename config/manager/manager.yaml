@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: system
+  labels:
+    app.kubernetes.io/name: ravendb-cloud-operator
+    # The pod already satisfies the restricted profile: runAsNonRoot, a
+    # RuntimeDefault seccomp profile, no privilege escalation and every
+    # capability dropped. Enforcing it here costs nothing today and turns a
+    # future edit that drops one of those into a rejected pod rather than a
+    # quietly less confined one.
+    #
+    # Pinned to a version rather than latest, so a newer Kubernetes tightening
+    # the profile cannot stop this namespace admitting the operator during an
+    # upgrade. Move it deliberately.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.29
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.29
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+  labels:
+    app.kubernetes.io/name: ravendb-cloud-operator
+    control-plane: controller-manager
+spec:
+  # The client's pacing is per process. Two replicas would double the outbound
+  # rate, so this runs single-writer with leader election instead.
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      serviceAccountName: controller-manager
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: manager
+        # A local build, for the development path: make deploy replaces it
+        # with IMG. The published install is the Helm chart, which pins the
+        # image of the release it came with.
+        image: ravendb-cloud-operator:dev
+        command: ["/manager"]
+        args:
+        - --leader-elect
+        - --health-probe-bind-address=:8081
+        # env:
+        # # Point every CloudAccount at another control plane, for a staging
+        # # cloud or a simulator. An account that sets spec.endpoint still wins
+        # # over this. Uncomment to use; there is no second client
+        # # implementation to swap in, only this redirect.
+        # - name: RAVENDB_CLOUD_ENDPOINT
+        #   value: https://api.staging.example.com
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 256Mi

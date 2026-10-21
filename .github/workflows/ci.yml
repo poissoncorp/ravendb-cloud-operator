@@ -1,0 +1,257 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first one's answer irrelevant, and
+# the lab job holds a kind cluster for a few minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Every Makefile target shells out to hack/go.sh by default, which needs
+  # Docker only because Go is not installed on the maintainer's host. A runner
+  # has Go, so the container would be pure overhead.
+  GO_LOCAL: "1"
+
+jobs:
+  # Fast and cheap, so a formatting slip does not wait behind a kind cluster.
+  lint:
+    name: format, vet, lint and import rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l ./api ./cmd ./internal)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would change these files:"
+            echo "$unformatted"
+            gofmt -d ./api ./cmd ./internal
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          # Keep in step with GOLANGCI_LINT_VERSION in the Makefile.
+          version: v2.14.0
+
+      # The architecture rules are a normal Go test, but they are the ones a
+      # reviewer is least likely to notice being broken, so they get named.
+      - name: import rules
+        run: go test ./internal/arch/... -count=1 -v
+
+      # These two are also in the pre-commit hook. They are repeated here
+      # because a hook can be skipped with --no-verify, and because nobody has
+      # to have run `make hooks` for CI to hold.
+      - name: shell scripts parse
+        run: |
+          rc=0
+          for f in $(git ls-files '*.sh'); do
+            bash -n "$f" || { echo "::error file=$f::not valid bash"; rc=1; }
+          done
+          exit $rc
+
+      - name: no em or en dashes
+        run: |
+          # UTF-8 bytes, not the characters, so this step passes its own check
+          # and does not depend on the runner's locale.
+          if git ls-files '*.go' '*.md' '*.sh' '*.yaml' '*.yml' Makefile hack/hooks |
+               xargs grep -lP '\xe2\x80\x94|\xe2\x80\x93' 2>/dev/null; then
+            echo "::error::em or en dashes found in the files above"
+            exit 1
+          fi
+
+  # Regenerating has to be a no-op. A renamed CRD field with a stale
+  # zz_generated or a stale config/crd broke the lab suite once, with an error
+  # about an unknown field rather than about the rename.
+  generated:
+    name: generated files are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: install controller-gen and setup-envtest
+        run: make tools
+
+      - name: regenerate
+        run: make generate manifests
+
+      - name: check for a diff
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::'make generate manifests' changed files; commit the result"
+            git diff --stat
+            git diff
+            exit 1
+          fi
+
+  # Nothing here audited the dependency tree until this job existed. Both halves
+  # are cheap and answer different questions, so both run.
+  vulnerabilities:
+    name: known vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # govulncheck reads the call graph, not just go.mod, so it reports a CVE
+      # only when this code actually reaches the vulnerable function. That is
+      # what keeps it from failing every week on something in the Kubernetes
+      # dependency tree that nothing here calls.
+      - name: govulncheck
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+      # And the image, because a Go-only scan cannot see the base layer. The
+      # build is local: this is a pull request check, so nothing is pushed and
+      # nothing needs a registry.
+      - name: build the image
+        run: docker build -t ravendb-cloud-operator:scan .
+
+      - name: scan the image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: ravendb-cloud-operator:scan
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  # The chart consumes the generated CRDs and RBAC rather than restating them.
+  # A stale copy means adding a +kubebuilder:rbac marker grants nothing to Helm
+  # users, and the failure is a permission error at runtime in someone else's
+  # cluster rather than anything visible here.
+  chart:
+    name: helm chart matches config/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: install controller-gen and setup-envtest
+        run: make tools
+
+      - name: chart is in sync, lints and renders
+        run: make chart-lint
+
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: install controller-gen and setup-envtest
+        run: make tools
+
+      # Under -race, because reconciles run concurrently and share clients.
+      - name: go test
+        run: make test-unit
+
+  crd:
+    name: CRD, CEL against a real API server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: install controller-gen and setup-envtest
+        run: make tools
+
+      # The apiserver and etcd binaries are 175MB and pinned to
+      # ENVTEST_K8S_VERSION, so there is no reason to fetch them every run.
+      - name: cache envtest binaries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: bin/envtest
+          key: envtest-${{ runner.os }}-1.37.0
+
+      # envtest starts a real kube-apiserver and etcd. Nothing else can tell us
+      # whether a CEL rule compiles and fires, because unit tests build objects
+      # in memory and never reach admission.
+      - name: go test ./api/...
+        run: make test-integration
+
+  labs:
+    name: labs, the operator in a real cluster
+    runs-on: ubuntu-latest
+    # The whole suite runs in about 150s, but image builds and cluster creation
+    # sit in front of it.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # labs/00_setup.sh prefers ./bin/kind and falls back to kind on PATH,
+      # which is what this provides. It creates the cluster itself, so this
+      # action is only here for the binary.
+      - name: install kind
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          install_only: true
+
+      # For the chart install check at the end of this job.
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: create the cluster and deploy
+        run: labs/00_setup.sh
+
+      # Serial, because a failing lab's output interleaved with five others is
+      # not something you want to read out of a CI log. The concurrent path is
+      # what a developer runs locally.
+      - name: run the labs
+        run: LAB_SERIAL=1 labs/run_all.sh
+
+      # The chart renders in the job above; this is the only thing that
+      # installs it, and the only thing that runs rbac.scope=namespace.
+      - name: install from the chart and check it works
+        run: labs/chart_install.sh
+
+      - name: operator logs on failure
+        if: failure()
+        run: |
+          kubectl -n ravendb-cloud-operator-system logs \
+            deploy/ravendb-cloud-operator-controller-manager --tail=200 || true
+          kubectl -n ravendb-cloud-lab logs deploy/mockcloud --tail=100 || true
+          kubectl get cloudaccounts,cloudclusters -A -o wide || true
+
+      - name: tear down
+        if: always()
+        run: labs/00_setup.sh --teardown || true

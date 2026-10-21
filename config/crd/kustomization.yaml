@@ -1,0 +1,4 @@
+resources:
+- bases/cloud.ravendb.net_cloudaccounts.yaml
+- bases/cloud.ravendb.net_cloudclusters.yaml
+- bases/cloud.ravendb.net_cloudclusterrestarts.yaml

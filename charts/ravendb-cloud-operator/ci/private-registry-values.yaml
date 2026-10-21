@@ -1,0 +1,43 @@
+# Everything the default values leave empty, so `helm template` reaches the
+# branches that only render when someone sets them.
+#
+# Rendering the defaults exercises none of this: imagePullSecrets and extraEnv
+# are both empty lists there, and an empty list is exactly the case the
+# templates skip.
+
+imagePullSecrets:
+  - name: my-registry-creds
+  - name: mirror-creds
+
+image:
+  repository: registry.internal.example/ravendb/ravendb-cloud-operator
+  # No leading v: release.yml publishes v0.1.0 as the image tag 0.1.0.
+  tag: 0.1.0
+  pullPolicy: Always
+
+cloudEndpoint: http://mockcloud.ravendb-cloud-lab.svc.cluster.local
+
+extraEnv:
+  # A plain value, which is the case a numeric-looking string gets wrong under
+  # --set and right in a file like this one.
+  - name: RAVENDB_CLOUD_RATE_LIMIT_PER_SECOND
+    value: "50"
+  # valueFrom, which is the reason the list is passed through as written
+  # instead of being built from a map of names to values.
+  - name: SOME_INJECTED_VALUE
+    valueFrom:
+      secretKeyRef:
+        name: some-secret
+        key: some-key
+
+podAnnotations:
+  example.com/scrape: "false"
+podLabels:
+  example.com/tier: control-plane
+
+nodeSelector:
+  kubernetes.io/os: linux
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule

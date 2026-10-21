@@ -1,0 +1,31 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        # Closing a response body or archive entry that was only read cannot
+        # lose data.
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        # The CLIs print to their own output; a failed write there has nobody
+        # left to tell.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    staticcheck:
+      checks:
+        # golangci-lint's defaults,
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # and the suggestions that would undo a choice made on purpose:
+        # S1016 converts a wire struct into a domain one, which ties the two
+        # readings of the API together; the two quick fixes are matters of taste.
+        - -S1016
+        - -QF1002
+        - -QF1008

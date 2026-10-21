@@ -1,0 +1,50 @@
+# Use a cluster that is managed somewhere else, the portal or Terraform, from
+# Kubernetes, without this operator ever changing it.
+#
+# With managementPolicy Observe written down, the operator changes nothing in
+# RavenDB Cloud, creating included: if no cluster has this display name, the
+# object reports ClusterNotFound and waits for one. What it does do is find the
+# cluster by name, report its state and publish its connection Secret into this
+# namespace, kept current when a node is added or RavenDB Cloud renews the
+# certificate. A CloudClusterRestart pointing at this object waits, since
+# Observe holds restarts back too.
+#
+# Not for an application team that only needs to connect to a cluster another
+# team manages with this operator: one cluster binds to one CloudCluster, and
+# this object needs the account's API key, which reaches every cluster. Copy
+# that team the connection Secret instead.
+#
+# The object name is yours; displayName is the cluster's name in the portal,
+# case aside. A Free cluster works the same way, with tier Free: the API
+# cannot create one, so a Free CloudCluster only ever finds one.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudCluster
+metadata:
+  name: search
+  namespace: apps
+spec:
+  accountRef:
+    name: ravendb-cloud
+  displayName: search-prod
+  tier: Production
+  managementPolicy: Observe
+
+  # Retain, the default, written out because this object only reads the
+  # cluster: deleting it must never be a way to end one managed elsewhere.
+  deletionPolicy: Retain
+
+  connectionSecret:
+    name: search-connection
+
+# kubectl -n apps get cloudcluster search -o wide
+# NAME     STATUS    CHANGES   TIER         REGION         NODES   AGE   POLICY    INSTANCE   CLUSTER-ID   URL                                         MESSAGE
+# search   Running   Applied   Production   eu-central-1   3       2m    Observe   PB30       1234-A       https://a.search-prod.acme.ravendb.cloud   The cluster is Active with 3 node(s), and Secret "search-connection" holds its URLs and client certificate.
+#
+# Before a cluster named search-prod exists, or with the name mistyped:
+#
+# NAME     STATUS            CHANGES   TIER   REGION   NODES   AGE
+# search   ClusterNotFound                                     30s
+#
+# TIER, REGION and NODES are what the cluster reports, so they stay empty until
+# the object is bound. The message says to fix a wrong name by deleting this object and applying it
+# again with the right spec.displayName, since that field cannot be edited.

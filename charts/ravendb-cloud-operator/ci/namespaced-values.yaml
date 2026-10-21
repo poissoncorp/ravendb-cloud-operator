@@ -1,0 +1,22 @@
+# The single-namespace install, which keeps the operator's Secret permissions
+# to one namespace. watchNamespace alone renders a Role
+# and RoleBinding instead of the cluster-wide pair, and it is a different
+# branch in every template that has one.
+#
+# Metrics are on here as well, because the Service and the metrics port render
+# only when they are, and nothing else in ci/ turns them on.
+
+watchNamespace: ravendb-system
+
+metrics:
+  enabled: true
+  secure: true
+  port: 8443
+  service:
+    enabled: true
+
+logging:
+  development: true
+  level: debug
+
+leaderElection: false

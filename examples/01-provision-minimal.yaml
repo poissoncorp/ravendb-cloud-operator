@@ -1,0 +1,44 @@
+# The smallest manifest that creates a cluster.
+#
+# An account and a tier. The display name defaults to the object name,
+# orders-dev, and the display name is how the operator finds the cluster: if
+# one named orders-dev already runs in the account, this object takes it over
+# instead of creating a second one (see 03-take-over-existing.yaml). If none
+# does, the operator creates it and resolves everything else:
+#
+#   provider, region, allowedIPs   from the CloudAccount defaults
+#   releaseChannel                 the CloudAccount default, then RavenDB Cloud's
+#   instanceType                   the smallest shape offered for the tier
+#   storage.sizeGB                 the smallest disk that shape sells
+#   storage.type                   SsdStandard, or SsdPremium on GCP
+#   subdomain                      derived from the display name
+#
+# Every one of those is written to status, so the object reports what it got
+# rather than leaving you to guess. A field left out of the manifest stays
+# unmanaged afterwards: the operator changes only what the manifest says.
+#
+# Two of them are permanent. displayName and subdomain cannot be edited once
+# the object exists, not even to add one that was left out. If the derived
+# subdomain is already taken, delete this object and apply it again with
+# spec.subdomain set; nothing is created until the name is accepted, so nothing
+# is lost. In a shared account, naming it up front is the safer habit.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudCluster
+metadata:
+  name: orders-dev
+  namespace: apps
+spec:
+  accountRef:
+    name: ravendb-cloud
+  tier: Development
+
+# kubectl -n apps get cloudcluster orders-dev
+# NAME         STATUS    CHANGES   TIER          REGION         NODES   AGE
+# orders-dev   Running   Applied   Development   eu-central-1   1       6m
+#
+# STATUS reads Creating while RavenDB Cloud builds it, and Running once the
+# cluster is Active and its connection Secret is published. -o wide adds
+# POLICY (Full, since this object created it), INSTANCE, CLUSTER-ID, URL and
+# the Ready message. To block until it can be used:
+#
+#   kubectl -n apps wait --for=condition=Ready cloudcluster/orders-dev --timeout=30m

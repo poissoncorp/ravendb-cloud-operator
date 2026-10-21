@@ -1,0 +1,60 @@
+# Take over a cluster that already runs in RavenDB Cloud.
+#
+# Same kind, same fields: there is no separate form for a cluster that exists.
+# The display name, here the object name legacy-prod, is the identity. RavenDB
+# Cloud keeps display names unique per account and cannot rename a cluster, so
+# the name finds exactly one cluster and this object binds to it. Case does
+# not matter, the same as in RavenDB Cloud's own check.
+#
+# Found this way, the cluster runs under managementPolicy Observe until the
+# manifest says otherwise: the operator reads it, reports on it and publishes
+# its connection Secret, and changes nothing in RavenDB Cloud. status.adopted
+# is true and status.managementPolicy says Observe. Anything the manifest sets
+# that differs from the cluster is reported on CHANGES as NotApplied.
+#
+# The tier has to be right. A cluster named legacy-prod that is not Production
+# is some other cluster than the one this manifest describes, so the object
+# reports NameTaken and binds nothing. The same goes for provider and region
+# when you set them. A cluster another CloudCluster already manages is
+# NameTaken too.
+#
+# creationMode TakeOverOnly is what makes this a take-over and nothing else: if
+# no cluster has the name, the object reports ClusterNotFound and creates
+# nothing. Left at the default, TakeOverOrCreate, a mistyped name would create a
+# new cluster.
+#
+# To manage the cluster from here on, write the manifest from the cluster
+# rather than by hand. The export tool reads it through the RavenDB Cloud API
+# and prints a CloudCluster that matches what runs, with managementPolicy Full
+# and creationMode TakeOverOnly:
+#
+#   kubectl ravendb-cloud export --account ravendb-cloud -n apps legacy-prod > legacy-prod.yaml
+#   kubectl apply -f legacy-prod.yaml
+#
+# Applying it changes nothing, because nothing differs, and from then on editing
+# it is how the cluster changes. A hand-written manifest with a wrong field and
+# managementPolicy Full would reshape the cluster to match on the first pass.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudCluster
+metadata:
+  name: legacy-prod
+  namespace: apps
+spec:
+  accountRef:
+    name: ravendb-cloud
+  tier: Production
+  creationMode: TakeOverOnly
+
+# kubectl -n apps get cloudcluster legacy-prod
+# NAME          STATUS    CHANGES   TIER         REGION         NODES   AGE
+# legacy-prod   Running   Applied   Production   eu-central-1   3       1m
+#
+# kubectl -n apps describe cloudcluster legacy-prod
+#   Normal  Adopted  Found RavenDB Cloud cluster "legacy-prod" (1234-A) already
+#                    running; managing it with managementPolicy Observe, which
+#                    changes nothing, until spec.managementPolicy is Full.
+#
+# deletionPolicy defaults to Retain, so deleting this object leaves the cluster
+# running. Terminate would terminate it on delete, Observe or not, because
+# TakeOverOnly says taking it over was meant. A cluster found under the default
+# TakeOverOrCreate is never terminated, only left running with a Warning.

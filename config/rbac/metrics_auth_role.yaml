@@ -1,0 +1,21 @@
+# The metrics endpoint asks the API server who is calling and whether they are
+# allowed to scrape. Those two questions are TokenReview and
+# SubjectAccessReview, so serving authenticated metrics needs this binding.
+# Without it the endpoint answers every scrape with an error.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-auth-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create

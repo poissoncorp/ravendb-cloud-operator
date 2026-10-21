@@ -1,0 +1,796 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: cloudclusters.cloud.ravendb.net
+spec:
+  group: cloud.ravendb.net
+  names:
+    categories:
+    - ravendb
+    kind: CloudCluster
+    listKind: CloudClusterList
+    plural: cloudclusters
+    shortNames:
+    - rcc
+    - rcluster
+    singular: cloudcluster
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      name: Status
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Synced")].reason
+      name: Changes
+      type: string
+    - jsonPath: .status.tier
+      name: Tier
+      type: string
+    - jsonPath: .status.region
+      name: Region
+      type: string
+    - jsonPath: .status.nodes
+      name: Nodes
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.displayName
+      name: Display-Name
+      priority: 1
+      type: string
+    - jsonPath: .status.managementPolicy
+      name: Policy
+      priority: 1
+      type: string
+    - jsonPath: .status.adopted
+      name: Adopted
+      priority: 1
+      type: boolean
+    - jsonPath: .status.instanceType
+      name: Instance
+      priority: 1
+      type: string
+    - jsonPath: .status.productID
+      name: Cluster-ID
+      priority: 1
+      type: string
+    - jsonPath: .status.urls[0]
+      name: URL
+      priority: 1
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].message
+      name: Message
+      priority: 1
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          CloudCluster is one RavenDB Cloud cluster, created by this operator or found
+          already running and taken over.
+
+          RavenDB Cloud calls it a product. It is one to six RavenDB nodes behind a
+          shared DNS name.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              CloudClusterSpec is the desired state of one RavenDB Cloud cluster.
+
+              The display name is what identifies the cluster. It is unique within a
+              RavenDB Cloud account and cannot be renamed there, so it names exactly one
+              cluster for as long as that cluster exists. When a cluster by that name
+              already exists, this object takes it over; when none does, the operator
+              creates it. That is also what lets a Kubernetes cluster be rebuilt from git:
+              every object finds its cluster again.
+
+              Only the fields you set are managed. A field left out is left as the cluster
+              has it, and on a cluster the operator creates it gets a default, which status
+              reports.
+
+              Fields fall into three groups, and it is worth knowing which is which before
+              editing a live cluster:
+
+                - Applied, under managementPolicy Full. instanceType, nodes, and storage:
+                  a larger sizeGB, type and iops, with throughputMBps riding along on any
+                  of those. Each storage field is compared only when it is set.
+                - Rejected at admission. accountRef, tier, subdomain and displayName can
+                  never change, and provider and region can never change away from a
+                  value they already had. RavenDB Cloud cannot move a cluster between any
+                  of them, so a manifest that asks is refused rather than left to differ
+                  forever. subdomain cannot be added later either, and displayName only
+                  as the object name it already defaulted to; provider and region can.
+                - Accepted and reported, never applied. releaseChannel and
+                  networking.allowedIPs, which RavenDB Cloud takes at creation only, and
+                  a change to storage.throughputMBps alone, which it refuses. The
+                  operator reports the difference on the Synced condition and tells you
+                  to change it in the portal.
+            properties:
+              accountRef:
+                description: |-
+                  AccountRef selects the CloudAccount in this namespace whose credential
+                  and defaults this cluster uses. It cannot be changed: a cluster cannot
+                  move between RavenDB Cloud accounts.
+
+                  On Kubernetes 1.31 or newer, this lists the clusters of one account:
+
+                    kubectl get cloudclusters --field-selector spec.accountRef.name=<account>
+                properties:
+                  name:
+                    description: Name of the referenced object.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              connectionSecret:
+                description: |-
+                  ConnectionSecret controls the Secret the operator publishes with the
+                  cluster's URLs and client certificate, for applications in this
+                  namespace to mount.
+                properties:
+                  enabled:
+                    default: true
+                    description: |-
+                      Enabled controls whether the operator publishes into the Secret.
+                      Defaults to true.
+
+                      Setting it to false removes every key the operator wrote, the client
+                      certificate and its password included. The Secret object itself is left
+                      in place and is deleted with the CloudCluster. A pod that names one of
+                      those keys, through secretKeyRef or a volume's items, then fails to
+                      start until the keys are back; one that mounts the whole Secret sees an
+                      empty directory.
+                    type: boolean
+                  includeCertificate:
+                    default: true
+                    description: |-
+                      IncludeCertificate controls whether the client certificate downloaded
+                      from RavenDB Cloud is placed in the Secret. Defaults to true. Turn it
+                      off if certificates are distributed by another mechanism in your
+                      cluster.
+                    type: boolean
+                  name:
+                    description: |-
+                      Name of the Secret to write. Defaults to "<cloudcluster-name>-connection".
+                      It must be a valid Secret name, a DNS-1123 subdomain.
+
+                      If a Secret by that name already exists and was not created for this
+                      cluster, the operator leaves it alone and Ready reports NameTaken.
+                    maxLength: 253
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                    type: string
+                type: object
+              creationMode:
+                default: TakeOverOrCreate
+                description: |-
+                  CreationMode decides what the operator does with the name it finds the
+                  cluster by.
+
+                    TakeOverOrCreate  takes over a cluster that already has the name, and
+                                      creates one when none does. The default.
+                    TakeOverOnly      never creates. With no cluster of that name the
+                                      object reports ClusterNotFound.
+                    CreateOnly        never takes over. A cluster that already has the
+                                      name is reported as NameTaken and left alone.
+
+                  It also decides what deletionPolicy Terminate may end. A cluster this
+                  object created is terminated. One it took over is terminated only under
+                  TakeOverOnly, where taking it over was asked for; one found under
+                  TakeOverOrCreate is left running, and a Warning event says so.
+
+                  kubectl ravendb-cloud export writes TakeOverOnly, so a manifest applied again
+                  from git never creates an empty cluster in place of one it could not
+                  find. It cannot change once set, with one exception: TakeOverOrCreate
+                  may become TakeOverOnly, which confirms that a cluster this object took
+                  over is meant to be its own.
+                enum:
+                - TakeOverOrCreate
+                - TakeOverOnly
+                - CreateOnly
+                type: string
+              deletionPolicy:
+                default: Retain
+                description: |-
+                  DeletionPolicy decides what deleting this object does to the cloud
+                  cluster. Retain, the default, keeps the cluster running. Terminate
+                  terminates it, which cannot be undone, when this object created it or
+                  took it over under creationMode TakeOverOnly.
+                enum:
+                - Retain
+                - Terminate
+                type: string
+              displayName:
+                description: |-
+                  DisplayName is the cluster name shown in the RavenDB Cloud portal, and
+                  the name the operator finds the cluster by. Defaults to the CloudCluster
+                  object name. RavenDB Cloud caps it at 100 characters.
+
+                  If a cluster by this name exists in the account, this object takes it
+                  over; if none does, the operator creates one with this name. RavenDB
+                  Cloud keeps display names unique per account, ignoring case, and has no
+                  way to rename a cluster, which is what makes the name a safe identity.
+
+                  Set, it cannot be changed. Omitted, it can be added later only as the
+                  object name it defaulted to, ignoring case, which is what the export
+                  tool writes for a cluster this object already found.
+                maxLength: 100
+                type: string
+              instanceType:
+                description: |-
+                  InstanceType is the RavenDB Cloud node shape, for example PB40. Leave it
+                  unset to let the operator pick the smallest shape offered for the tier in
+                  the chosen region when it creates the cluster; the resolved value is
+                  written to status. A shape the tier does not offer is refused before the
+                  cluster is created, and the message lists the ones it does.
+
+                  The smallest Production shape has a shared CPU and is sold without
+                  additional nodes, so a cluster created from it stays at three. Name a PB
+                  shape or larger for a cluster that will grow, or change this field later:
+                  RavenDB Cloud moves a running cluster to another shape.
+                type: string
+              managementPolicy:
+                description: |-
+                  ManagementPolicy caps what the operator may change in RavenDB Cloud.
+
+                    Full     creates the cluster when none exists, and applies the changes
+                             the RavenDB Cloud API supports: instance type, storage and
+                             node count.
+                    Observe  changes nothing, creating included. The operator reads the
+                             cluster, publishes its connection Secret and reports on the
+                             Synced condition how the manifest differs.
+
+                  Left unset, it is Full for a cluster this object created and Observe for
+                  one it found already running, so that taking a cluster over never
+                  reshapes it until you say so. The resolved value is in
+                  status.managementPolicy.
+
+                  deletionPolicy does not depend on it, even under Observe: what Terminate
+                  may end is decided by creationMode.
+                enum:
+                - Observe
+                - Full
+                type: string
+              networking:
+                description: Networking is the cloud-side firewall.
+                properties:
+                  allowedIPs:
+                    description: |-
+                      AllowedIPs is the list of address ranges allowed to reach the cluster.
+                      Leave it unset to use spec.defaults.allowedIPs on the CloudAccount.
+                      RavenDB Cloud requires at least one entry to create a cluster.
+
+                      Every entry must be in CIDR notation, so a single address needs a
+                      prefix: 203.0.113.7/32, not 203.0.113.7, which RavenDB Cloud refuses.
+                      Order carries no meaning and duplicates are refused.
+
+                      RavenDB Cloud allows at most 24 entries on AWS and 200 on Azure and GCP.
+                      The operator checks that before it creates the cluster.
+
+                      RavenDB Cloud takes this list at creation only. A later change is
+                      reported on the Synced condition and not applied.
+                    items:
+                      format: cidr
+                      type: string
+                    maxItems: 200
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
+              nodes:
+                description: |-
+                  Nodes is the desired cluster size. Leave it unset to accept the node
+                  count that comes with the instance type. Changing it later makes the
+                  operator add or remove nodes one at a time, which is the only way the
+                  RavenDB Cloud API supports it. RavenDB Cloud refuses fewer nodes than
+                  the instance type comes with.
+
+                  A Production cluster has between three and six: the three standard nodes
+                  A, B and C, which RavenDB Cloud never removes, and at most three
+                  additional ones on top. A Free or Development cluster has exactly one.
+                  Some instance types are sold without additional nodes, and on those the
+                  count cannot change at all; the operator reports that on the Synced
+                  condition rather than asking.
+                format: int32
+                maximum: 6
+                minimum: 1
+                type: integer
+              pollInterval:
+                default: 5m
+                description: |-
+                  PollInterval is how often the operator re-reads a settled cluster from
+                  RavenDB Cloud. Defaults to five minutes. While RavenDB Cloud is creating
+                  or changing the cluster, the operator looks every 30 seconds, or at this
+                  interval when it is shorter.
+                type: string
+              provider:
+                description: |-
+                  Provider is the hosting cloud. Defaults to the CloudAccount default when
+                  the operator creates the cluster; on one it takes over, unset means
+                  whatever the cluster runs on, and a provider that differs from it means
+                  the name belongs to some other cluster (NameTaken).
+
+                  Once set it cannot be changed or removed. It can be added later, to pin
+                  the value the cluster already has.
+                enum:
+                - AWS
+                - Azure
+                - GCP
+                type: string
+              region:
+                description: |-
+                  Region is the provider region, for example eu-central-1. Defaults to the
+                  CloudAccount default when the operator creates the cluster, and is then
+                  checked against the regions the CloudAccount lists in status.providers;
+                  if it is not one of them, the message lists those that are. On a cluster
+                  it takes over, a region that differs means the name belongs to some
+                  other cluster (NameTaken).
+
+                  Once set it cannot be changed or removed. It can be added later, to pin
+                  the value the cluster already has.
+                type: string
+              releaseChannel:
+                description: |-
+                  ReleaseChannel is the RavenDB version stream, for example Stable72. The
+                  ones the account may use are listed in the CloudAccount's status.
+                  Defaults to the CloudAccount default, then to the account default
+                  reported by RavenDB Cloud. RavenDB Cloud takes it at creation only, so a
+                  later change is reported on the Synced condition and not applied.
+                type: string
+              storage:
+                description: |-
+                  Storage is the data disk. Leave it unset to get the smallest size the
+                  instance type offers, which status then reports: RavenDB Cloud sells
+                  each instance type its own fixed set of sizes, so naming one before
+                  choosing an instance type means guessing.
+
+                  Each field is compared only when it is set, and one left out keeps the
+                  value the disk has. Growing sizeGB triggers an online resize.
+                properties:
+                  iops:
+                    description: |-
+                      IOPS provisions dedicated IOPS where the provider supports it. When the
+                      operator creates the cluster it checks this against the range the disk
+                      class allows. Left unset on a cluster that already exists, the disk
+                      keeps the IOPS it has.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  sizeGB:
+                    description: |-
+                      SizeGB is the data disk size in GB. RavenDB Cloud sells a fixed set of
+                      sizes per instance type.
+
+                      When the operator creates the cluster it checks this against the sizes
+                      the instance type offers and, if it is not one of them, lists the ones
+                      that are. After that the disk can only grow. A smaller size is reported
+                      on the Synced condition and never sent, because cloud disks cannot
+                      shrink, and so is a size RavenDB Cloud says this disk cannot move to.
+                      Any other larger size is sent, and RavenDB Cloud judges it.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  throughputMBps:
+                    description: |-
+                      ThroughputMBps provisions dedicated disk throughput in MB/s where the
+                      provider supports it. RavenDB Cloud takes a throughput change only
+                      together with another storage change, so a change to this alone is
+                      reported on the Synced condition and not applied.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  type:
+                    description: |-
+                      Type is the disk class. Leave it unset and a cluster the operator
+                      creates gets the right one for the provider: SsdStandard on AWS and
+                      Azure, SsdPremium on GCP, which is the only class Google Cloud products
+                      offer. On a cluster that already exists an unset type is not compared,
+                      so the disk keeps the class it has.
+                    enum:
+                    - SsdStandard
+                    - SsdPremium
+                    type: string
+                type: object
+              subdomain:
+                description: |-
+                  Subdomain is the DNS label under the account domain, and it ends up in
+                  every node URL. Leave it unset to derive it from displayName. It is only
+                  sent when the operator creates the cluster.
+
+                  RavenDB Cloud allows at most 13 characters, letters, digits and dashes
+                  only, with no leading or trailing dash, and the name must not be taken
+                  already. The first three are checked at kubectl apply. Whether a name is
+                  taken only RavenDB Cloud knows, so a taken one comes back as a refused
+                  create.
+
+                  Whichever way you leave this field on the first apply is how it stays:
+                  set, it cannot be changed; omitted, it cannot be added. So if the
+                  derived name turns out to be taken, no edit to this object fixes it.
+                  Delete the object and apply it again with an explicit subdomain; the
+                  cluster was never created, so nothing is lost.
+
+                  In a shared account, where names are likely to collide, setting it on
+                  the first apply is worth it.
+                maxLength: 13
+                pattern: ^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                type: string
+              tier:
+                description: |-
+                  Tier selects the RavenDB Cloud product tier. It cannot be changed:
+                  RavenDB Cloud cannot move a cluster between tiers.
+
+                  Free clusters cannot be created through the RavenDB Cloud API, only in
+                  the portal. A Free CloudCluster therefore only ever takes over a cluster
+                  that already exists, and until one by its name does it reports
+                  ClusterNotFound.
+
+                  For a cluster that already exists, this must be the tier it runs on. A
+                  different tier means the name belongs to some other cluster: the object
+                  does not bind to it and Ready reports NameTaken.
+                enum:
+                - Free
+                - Development
+                - Production
+                type: string
+            required:
+            - accountRef
+            - tier
+            type: object
+            x-kubernetes-validations:
+            - fieldPath: .accountRef.name
+              message: 'accountRef is immutable: a cluster cannot move between RavenDB
+                Cloud accounts. Delete this object and apply it again with the right
+                accountRef; with the default deletionPolicy Retain nothing in RavenDB
+                Cloud is touched'
+              rule: self.accountRef.name == oldSelf.accountRef.name
+            - fieldPath: .storage.type
+              message: Google Cloud products do not offer SsdStandard; leave spec.storage.type
+                unset, or set it to SsdPremium
+              rule: '!has(self.provider) || self.provider != ''GCP'' || !has(self.storage)
+                || !has(self.storage.type) || self.storage.type != ''SsdStandard'''
+            - fieldPath: .nodes
+              message: 'a Free or Development cluster has exactly one node: additional
+                nodes are a Production feature in RavenDB Cloud. Leave spec.nodes
+                unset or set it to 1'
+              rule: '!has(self.nodes) || self.tier == ''Production'' || self.nodes
+                == 1'
+            - fieldPath: .nodes
+              message: a Production cluster keeps its three standard nodes A, B and
+                C, which RavenDB Cloud never removes. Set spec.nodes between 3 and
+                6
+              rule: '!has(self.nodes) || self.tier != ''Production'' || self.nodes
+                >= 3'
+            - fieldPath: .tier
+              message: 'tier is immutable: RavenDB Cloud cannot move a cluster between
+                tiers. To use another tier, delete this object and apply it again
+                with another spec.displayName; with the default deletionPolicy Retain
+                nothing in RavenDB Cloud is touched'
+              rule: self.tier == oldSelf.tier
+            - fieldPath: .provider
+              message: 'provider is immutable: RavenDB Cloud cannot move a cluster
+                between providers. To use another provider, delete this object and
+                apply it again with another spec.displayName; with the default deletionPolicy
+                Retain nothing in RavenDB Cloud is touched'
+              rule: '!has(oldSelf.provider) || (has(self.provider) && self.provider
+                == oldSelf.provider)'
+            - fieldPath: .region
+              message: 'region is immutable: RavenDB Cloud cannot move a cluster between
+                regions. To use another region, delete this object and apply it again
+                with another spec.displayName; with the default deletionPolicy Retain
+                nothing in RavenDB Cloud is touched'
+              rule: '!has(oldSelf.region) || (has(self.region) && self.region == oldSelf.region)'
+            - fieldPath: .subdomain
+              message: 'subdomain is immutable, and cannot be added later either:
+                it is baked into the cluster DNS names'
+              rule: has(oldSelf.subdomain) == has(self.subdomain) && (!has(self.subdomain)
+                || self.subdomain == oldSelf.subdomain)
+            - fieldPath: .creationMode
+              message: creationMode cannot change, except from TakeOverOrCreate to
+                TakeOverOnly, which confirms that taking over the cluster is meant.
+                Delete this object and apply it again with another creationMode; with
+                the default deletionPolicy Retain nothing in RavenDB Cloud is touched
+              rule: '!has(oldSelf.creationMode) || (has(self.creationMode) && (self.creationMode
+                == oldSelf.creationMode || (oldSelf.creationMode == ''TakeOverOrCreate''
+                && self.creationMode == ''TakeOverOnly'')))'
+            - fieldPath: .creationMode
+              message: 'creationMode CreateOnly needs managementPolicy Full: Observe
+                never creates a cluster'
+              rule: '!has(self.creationMode) || self.creationMode != ''CreateOnly''
+                || !has(self.managementPolicy) || self.managementPolicy != ''Observe'''
+          status:
+            description: CloudClusterStatus is the observed state of the cluster in
+              RavenDB Cloud.
+            properties:
+              adopted:
+                description: |-
+                  Adopted records whether this object found its cluster already running
+                  rather than creating it. It decides the default managementPolicy.
+                type: boolean
+              allowedIPs:
+                description: |-
+                  AllowedIPs is the firewall allow list as RavenDB Cloud currently has it.
+                  Compare it with spec to spot a difference; RavenDB Cloud cannot change
+                  it after creation.
+                items:
+                  type: string
+                type: array
+              certificateExpiresAt:
+                description: |-
+                  CertificateExpiresAt is when the published client certificate stops
+                  working. RavenDB Cloud issues them for five years and regenerates one
+                  month before expiry; the operator republishes the replacement shortly
+                  after that, so this should only ever move forwards.
+                format: date-time
+                type: string
+              certificateRefreshedAt:
+                description: CertificateRefreshedAt is when the client certificate
+                  was last downloaded.
+                format: date-time
+                type: string
+              cloudStatus:
+                description: |-
+                  CloudStatus is the raw RavenDB Cloud status string, passed through
+                  unmodified so an unexpected state is visible rather than flattened.
+                type: string
+              conditions:
+                description: |-
+                  Conditions answer two questions, each with one word in kubectl get.
+
+                  Ready, the STATUS column: can I use it? True exactly when the reason is
+                  Running. Otherwise the reason names the stage or the blocker:
+
+                    Creating               RavenDB Cloud is creating the cluster
+                    Updating               RavenDB Cloud is applying a change
+                    WaitingForCertificate  serving; the client certificate is not issued yet
+                    WaitingForAccount      the CloudAccount is not usable; the message says why
+                    InvalidSpec            the operator will not send this; the message names the field
+                    Refused                RavenDB Cloud refused to create the cluster
+                    QuotaReached           the account is at its product quota; retried on a timer
+                    NameTaken              the name belongs to another cluster or object, or the
+                                           connection Secret's name is taken
+                    ClusterNotFound        no cluster by that name, and this object may not create one
+                    DeletedInCloud         the cluster was deleted outside this operator
+                    AwaitingPayment        RavenDB Cloud waits for payment; resolve it in the portal
+                    CreationFailed         RavenDB Cloud could not create it and notified its support
+                    SecretNotWritten       serving, but the connection Secret could not be written
+                    Deleting               this object is being deleted; the message says what it waits for
+                    CloudUnreachable       Unknown: the RavenDB Cloud API did not answer
+                    KeyRejected            Unknown: RavenDB Cloud rejected the account's API key
+                    UnexpectedResponse     Unknown: RavenDB Cloud answered in a way this operator cannot read
+
+                  Unknown means the operator could not look. The cluster is probably still
+                  serving, and the rest of status is what was seen at lastSyncTime.
+
+                  Synced, the CHANGES column: did the manifest reach RavenDB Cloud? Set once
+                  the object is bound to a cluster.
+
+                    Applied     everything the manifest sets matches RavenDB Cloud
+                    Applying    a change was sent and RavenDB Cloud is applying it
+                    Waiting     RavenDB Cloud takes the change later, after a storage window or
+                                once the cluster is no longer busy; asked again each poll
+                    Refused     RavenDB Cloud refused the change; not asked again until the spec changes
+                    NotApplied  a difference the operator may not or cannot apply; the message says which
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              connectionSecretName:
+                description: ConnectionSecretName is the Secret holding URLs and certificate.
+                type: string
+              displayName:
+                description: DisplayName as seen in the RavenDB Cloud portal.
+                type: string
+              hardware:
+                description: Hardware is the observed node shape.
+                properties:
+                  cpuPriority:
+                    description: CPUPriority is the CPU priority RavenDB Cloud reports
+                      for the shape.
+                    type: string
+                  cpus:
+                    description: CPUs is the number of CPUs per node.
+                    format: int32
+                    type: integer
+                  ramMB:
+                    description: |-
+                      RAMMB is the node memory in MB, 1024 to each GB RavenDB Cloud reports.
+                      MB rather than GB because the smallest shapes have half a gigabyte.
+                    format: int32
+                    type: integer
+                  storage:
+                    description: Storage is the observed data disk.
+                    properties:
+                      iops:
+                        description: IOPS is the provisioned IOPS, when the disk has
+                          any.
+                        format: int32
+                        type: integer
+                      sizeGB:
+                        description: SizeGB is the disk size in GB.
+                        format: int32
+                        type: integer
+                      throughputMBps:
+                        description: |-
+                          ThroughputMBps is the provisioned throughput in MB/s, when the disk has
+                          any.
+                        format: int32
+                        type: integer
+                      type:
+                        description: Type is the disk class.
+                        enum:
+                        - SsdStandard
+                        - SsdPremium
+                        type: string
+                    type: object
+                type: object
+              instanceType:
+                description: InstanceType is the node shape the cluster runs on.
+                type: string
+              lastSyncTime:
+                description: LastSyncTime is when cloud state was last read successfully.
+                format: date-time
+                type: string
+              managementPolicy:
+                description: ManagementPolicy is the effective policy after defaulting.
+                enum:
+                - Observe
+                - Full
+                type: string
+              nodeTags:
+                description: NodeTags are the RavenDB cluster node tags (A, B, C ...).
+                items:
+                  type: string
+                type: array
+              nodes:
+                description: Nodes is the observed node count.
+                format: int32
+                type: integer
+              observedGeneration:
+                description: ObservedGeneration is the spec generation this status
+                  reflects.
+                format: int64
+                type: integer
+              productID:
+                description: |-
+                  ProductID is the RavenDB Cloud cluster id this object is bound to. Once
+                  set, this object manages that cluster and no other.
+                type: string
+              provider:
+                description: Provider is the hosting cloud the cluster runs on.
+                enum:
+                - AWS
+                - Azure
+                - GCP
+                type: string
+              provisionAttemptedAt:
+                description: |-
+                  ProvisionAttemptedAt is when the operator asked RavenDB Cloud to create
+                  the cluster. It is set just before the request, so that if the operator
+                  stops before recording the productID, the cluster it then finds by name
+                  is known to be one this object created rather than one it found.
+                format: date-time
+                type: string
+              provisionAttemptedName:
+                description: |-
+                  ProvisionAttemptedName is the display name sent with the create request
+                  ProvisionAttemptedAt marks. Until productID is set, the operator looks
+                  the cluster up by this name.
+                type: string
+              region:
+                description: Region is the provider region the cluster runs in.
+                type: string
+              releaseChannel:
+                description: ReleaseChannel is the RavenDB version stream the cluster
+                  follows.
+                type: string
+              studioURL:
+                description: StudioURL opens the RavenDB Studio for this cluster.
+                type: string
+              tier:
+                description: Tier is the RavenDB Cloud product tier the cluster runs
+                  on.
+                enum:
+                - Free
+                - Development
+                - Production
+                type: string
+              urls:
+                description: URLs are the per-node HTTPS endpoints, index-aligned
+                  with nodeTags.
+                items:
+                  type: string
+                type: array
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - fieldPath: .spec.displayName
+          message: 'displayName is immutable: it is the name the operator finds the
+            cluster by. It can be added later only as the name this object already
+            uses, which is what the export tool writes'
+          rule: 'has(oldSelf.spec.displayName) ? (has(self.spec.displayName) && self.spec.displayName
+            == oldSelf.spec.displayName) : (!has(self.spec.displayName) || self.spec.displayName.lowerAscii()
+            == self.metadata.name)'
+        - message: 'metadata.name must be at most 63 characters: the connection Secret
+            carries it in the cloud.ravendb.net/cluster label, and a label value cannot
+            be longer'
+          rule: size(self.metadata.name) <= 63
+    selectableFields:
+    - jsonPath: .spec.accountRef.name
+    served: true
+    storage: true
+    subresources:
+      status: {}

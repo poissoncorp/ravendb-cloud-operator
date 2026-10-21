@@ -1,0 +1,31 @@
+# Actions and Go modules both go stale silently, and a stale action is the
+# supply-chain half: a tag like @v4 is mutable, so pinning by digest is what a
+# hardened workflow does. Pinning by hand without something to move the pins is
+# worse than not pinning, because nobody updates them and the workflow ends up
+# frozen on an action with a known problem. This is that something.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # The Kubernetes libraries move together and a partial bump does not
+      # build, so they are one pull request rather than nine.
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+      rest:
+        patterns: ["*"]
+        exclude-patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
