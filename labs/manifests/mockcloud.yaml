@@ -1,4 +1,4 @@
-# The lab's stand-in RavenDB Cloud control plane.
+# The simulated RavenDB Cloud control plane the labs run against.
 #
 # The operator talks to this exactly as it would talk to api.cloud.ravendb.net;
 # the only difference is the URL in CloudAccount.spec.endpoint. That field is

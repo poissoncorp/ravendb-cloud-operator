@@ -28,7 +28,7 @@ MISSING="$(lab_display missing)"
 TWINS="$(lab_display twin)"
 ALL_OBJECTS="$LEGACY $SECOND $WRONG_TIER $NOT_THERE $AMBIGUOUS $SEED"
 
-# The shape of the cluster to take over. The stand-in seeds the kind of cluster
+# The shape of the cluster to take over. The simulator seeds the kind of cluster
 # a team would have made by hand, a three node Production PB10. A real account
 # has nothing to seed into, so there the lab makes its own predecessor from the
 # smallest Development shape, which is also the cheapest to reshape.
@@ -91,7 +91,7 @@ delete_lab_objects() {
 }
 
 # Everything this lab seeds or creates is named lab04-something, so the
-# stand-in's leftovers can be found by prefix and nothing of another lab's is
+# simulator's leftovers can be found by prefix and nothing of another lab's is
 # touched. On a real account it terminates only what this run made.
 forget_lab_clusters() {
   local id
@@ -127,7 +127,7 @@ on_mock && forget_lab_clusters
 
 step "What is already out there"
 if on_mock; then
-  note "seeding $LEGACY through the lab control plane, standing in for a cluster"
+  note "seeding $LEGACY through the simulator, standing in for a cluster"
   note "a colleague created in the portal months ago"
   LEGACY_ID="$(lab_api POST /_lab/clusters \
     "{\"displayName\":\"$LEGACY\",\"tier\":\"$TIER\",\"instanceType\":\"$SMALL\",\"region\":\"eu-central-1\",\"provider\":\"Aws\"}" |
@@ -220,7 +220,7 @@ SECRET="${LEGACY}-connection"
 check "status.connectionSecretName" "$SECRET" "$(jp cloudcluster "$LEGACY" .status.connectionSecretName)"
 check_contains "and Running says so" "Secret \"$SECRET\" holds its URLs and client certificate" \
   "$(condition_message cloudcluster "$LEGACY" Ready)"
-# What the cluster's endpoints are. The stand-in's are known in advance; a real
+# What the cluster's endpoints are. The simulator's are known in advance; a real
 # environment's are whatever RavenDB Cloud built, including the per-tier "-dev"
 # rewrite, so there they come from the object and are tied to this run by the
 # subdomain the predecessor was created with.
@@ -374,7 +374,7 @@ check "$WRONG_TIER STATUS" NameTaken "$(status_of "$WRONG_TIER")"
 check_contains "the message says how the cluster differs" \
   "it is $TIER and spec.tier says $OTHER_TIER" "$WRONG_MSG"
 check_contains "and that nothing was touched" "was not bound to it and nothing was changed" "$WRONG_MSG"
-check_contains "and both ways out" "with another displayName to create a new cluster, or with the cluster's own values to manage that one" "$WRONG_MSG"
+check_contains "and both ways out, as edits" "Set spec.displayName to another name to create a new cluster, or those fields to the cluster's own values to manage that one" "$WRONG_MSG"
 check "$WRONG_TIER status.productID" "<empty>" "$(v="$(jp cloudcluster "$WRONG_TIER" .status.productID)"; echo "${v:-<empty>}")"
 check_calls "calls that create or reshape anything" 0 "$(reshape_calls)"
 note "tier cannot change on either side, so a name on a cluster of another tier belongs"
@@ -534,7 +534,7 @@ if on_mock; then
 else
   # Retain never touches the cloud side, and a CloudCluster that found its
   # cluster must not destroy what it did not create. The one this lab made as its
-  # stand-in predecessor is terminated directly, because nothing else would.
+  # simulator predecessor is terminated directly, because nothing else would.
   check "$LEGACY_ID is still running after every object naming it was deleted" \
     Active "$(product_status "$LEGACY_ID")"
   forget_lab_clusters

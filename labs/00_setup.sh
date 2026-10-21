@@ -41,8 +41,8 @@ fi
 
 info "using context: $(kubectl config current-context)"
 
-step "Building the operator and the lab control plane"
-# The lab control plane is a real HTTP server implementing the documented
+step "Building the operator and the simulator"
+# The simulator is a real HTTP server implementing the documented
 # RavenDB Cloud API. It exists so these labs cost nothing and need no account.
 docker build -q -t ravendb-cloud-operator:lab "$REPO_ROOT" >/dev/null
 docker build -q -f "$REPO_ROOT/labs/mockcloud/Dockerfile" -t ravendb-mockcloud:lab "$REPO_ROOT" >/dev/null
@@ -62,9 +62,9 @@ kubectl get crd \
   -o custom-columns=NAME:.metadata.name,ESTABLISHED:.status.conditions[?\(@.type==\"Established\"\)].status |
   grep -E 'NAME|cloud.ravendb.net'
 
-step "Deploying the lab control plane"
+step "Deploying the simulator"
 if on_cloud; then
-  note "LAB_TARGET=cloud, so the stand-in is deployed but unused: the operator"
+  note "LAB_TARGET=cloud, so the simulator is deployed but unused: the operator"
   note "will be pointed at $LAB_CLOUD_ENDPOINT instead"
 fi
 kubectl apply -f "$REPO_ROOT/labs/manifests/mockcloud.yaml" >/dev/null
@@ -82,15 +82,15 @@ kubectl -n "$LAB_OPERATOR_NAMESPACE" set image deploy/ravendb-cloud-operator-con
 # so it must not be pulled from a registry that does not have it.
 kubectl -n "$LAB_OPERATOR_NAMESPACE" patch deploy ravendb-cloud-operator-controller-manager \
   --type=json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]' >/dev/null
-# The lab control plane is not the real API, so production pacing there is pure
+# The simulator is not the real API, so production pacing there is pure
 # delay: most of the suite's wall clock was the operator waiting on a limiter
 # guarding a server that was not there.
 #
 # The pacing itself is still covered, by TestDefaultPacingStaysAboveOneSecondPerCall
 # and TestSequentialCallsArePaced, so nothing is lost by lifting it here.
 #
-# Only here. A cloud run must not inherit the stand-in's pace. The trailing dash
-# removes the variable, so a cluster set up for the stand-in first does not keep
+# Only here. A cloud run must not inherit the simulator's pace. The trailing dash
+# removes the variable, so a cluster set up for the simulator first does not keep
 # it.
 if on_cloud; then
   kubectl -n "$LAB_OPERATOR_NAMESPACE" set env deploy/ravendb-cloud-operator-controller-manager \
@@ -152,7 +152,7 @@ step "Waiting for the CloudAccount to verify its credential"
 # from the last one and waiting for it would prove nothing about the credential
 # applied a moment ago. observedGeneration catching up to generation is the
 # thing that says the operator has acted on THIS spec. Caught pointing at a
-# stand-in while reporting a real environment's domain.
+# simulator while reporting a real environment's domain.
 if ! wait_for cloudaccount ravendb-cloud \
      '.status.observedGeneration' "$(jp cloudaccount ravendb-cloud .metadata.generation)" 120; then
   warn "the account did not observe the spec just applied; recent operator logs:"
@@ -173,12 +173,12 @@ if on_cloud; then
   # The Ready message names the account's domain and never the endpoint, so the
   # proof that this is the control plane the run asked for is in two parts: the
   # spec the operator just observed names it, and the domain it verified is not
-  # the stand-in's.
+  # the simulator's.
   check "the account points at the endpoint this run asked for" \
     "$LAB_CLOUD_ENDPOINT" "$(jp cloudaccount ravendb-cloud .spec.endpoint)"
-  check "and verified an account that is not the stand-in's" no \
+  check "and verified an account that is not the simulator's" no \
     "$([ "$(jp cloudaccount ravendb-cloud .status.domainName)" = acme.ravendb.cloud ] && echo yes || echo no)"
-  # The stand-in reports fixed values; a real account reports its own, and which
+  # The simulator reports fixed values; a real account reports its own, and which
   # account it is is exactly what a setup step should show rather than assert.
   info "domain          : $(jp cloudaccount ravendb-cloud .status.domainName)"
   info "default channel : $(jp cloudaccount ravendb-cloud .status.defaultReleaseChannel)"
@@ -197,7 +197,7 @@ cat <<EOF
     The lab environment is up.
 
       application namespace : $LAB_NAMESPACE
-      control plane         : $LAB_CLOUD_NAMESPACE (a stand-in, not the real cloud)
+      control plane         : $LAB_CLOUD_NAMESPACE (a simulator, not the real cloud)
       operator              : $LAB_OPERATOR_NAMESPACE
 
     Next: labs/01_verify_credential.sh

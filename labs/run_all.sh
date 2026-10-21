@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run every lab in order and report a single tally.
 #
-#   labs/run_all.sh              run labs 01..07 against the current cluster
+#   labs/run_all.sh              run labs 01..06 against the current cluster
 #   labs/run_all.sh --setup      run 00_setup.sh first
 #
 # Each lab is self-checking and cleans up after itself, so this is also the
@@ -25,8 +25,7 @@ fi
 # runs append to, because a background job cannot write to a parent array.
 START=$SECONDS
 
-# Lab 01 runs on its own, first, for two reasons. It leaves the CloudAccount
-# Ready, which everything after it needs, and it measures account and metadata
+# Lab 01 runs on its own, first, because it measures account and metadata
 # traffic, which belongs to no cluster and so cannot be attributed to one lab.
 #
 # The rest run concurrently. They share a cluster, an operator and a control
@@ -47,17 +46,12 @@ run_one() {
   start=$SECONDS
   if bash "$script" >"$log" 2>&1; then rc=0; else rc=1; fi
   # Buffered, then printed in one go, so concurrent labs do not interleave.
-  printf '
-%s================================================================
-  %s
-================================================================%s
-'     "$C_BOLD" "$name" "$C_OFF"
+  printf '\n%s================================================================\n  %s\n================================================================%s\n' \
+    "$C_BOLD" "$name" "$C_OFF"
   cat "$log"
   rm -f "$log"
-  printf '%s %s
-' "$name" "$((SECONDS - start))" >>"$TIMING_FILE"
-  [ "$rc" -eq 0 ] || printf '%s
-' "$name" >>"$FAILED_FILE"
+  printf '%s %s\n' "$name" "$((SECONDS - start))" >>"$TIMING_FILE"
+  [ "$rc" -eq 0 ] || printf '%s\n' "$name" >>"$FAILED_FILE"
   return 0
 }
 
@@ -93,8 +87,7 @@ if [ -s "$FAILED_FILE" ]; then mapfile -t FAILED < <(sort -u "$FAILED_FILE"); fi
 PASSED=()
 for script in "${SCRIPTS[@]}"; do
   name="$(basename "$script")"
-  if [ "${#FAILED[@]}" -eq 0 ] || ! printf '%s
-' "${FAILED[@]}" | grep -qx "$name"; then
+  if [ "${#FAILED[@]}" -eq 0 ] || ! printf '%s\n' "${FAILED[@]}" | grep -qx "$name"; then
     PASSED+=("$name")
   fi
 done
