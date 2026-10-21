@@ -18,12 +18,12 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$LAB_ROOT/.." && pwd)}"
 
 # --- which control plane ----------------------------------------------------
 #
-# These labs were written against the stand-in and assumed it everywhere: in how
+# These labs were written against the simulator and assumed it everywhere: in how
 # long a create takes, in what a cluster may be called, and in the /_lab surface
 # they reach for to manufacture a situation. LAB_TARGET is what lets one script
 # run against both.
 #
-#   mock  (default) the lab control plane: free, fast, and able to stage things
+#   mock  (default) the simulator: free, fast, and able to stage things
 #                   a real service will not arrange on request
 #   cloud           a real RavenDB Cloud environment, which bills for what it
 #                   creates and settles on its own schedule
@@ -31,7 +31,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$LAB_ROOT/.." && pwd)}"
 
 case "$LAB_TARGET" in
   mock)
-    # The stand-in settles a create in 25s by default and a change at once.
+    # The simulator settles a create in 25s by default and a change at once.
     : "${LAB_SETTLE_TIMEOUT:=240}"
     : "${LAB_CHANGE_TIMEOUT:=120}"
     ;;
@@ -58,7 +58,7 @@ esac
 
 # Who may reach a cluster these labs create.
 #
-# The stand-in ignores this, so the lab account has always said 0.0.0.0/0 and
+# The simulator ignores this, so the lab account has always said 0.0.0.0/0 and
 # nobody had to think about it. Against a real environment that same line
 # provisions a RavenDB cluster reachable from the whole internet, and inheriting
 # that from a simulator is not a decision anybody made.
@@ -325,10 +325,10 @@ lab_subdomain() { printf 'l%02d%s%s' "$LAB_INDEX" "$1" "$LAB_RUN"; }
 lab_display() { printf '%s-%s-%s' "$LAB_ID" "$1" "$LAB_RUN"; }
 
 # cloud_names <slot> -> the spec lines a real environment needs and the
-# stand-in does not, ready to paste at the end of a CloudCluster spec.
+# simulator does not, ready to paste at the end of a CloudCluster spec.
 #
 # Emitted rather than always set, so the manifest a guide shows stays the
-# smallest one that works when the guide is read against the stand-in.
+# smallest one that works when the guide is read against the simulator.
 cloud_names() {
   on_cloud || return 0
   printf '  subdomain: %s\n' "$(lab_subdomain "$1")"
@@ -354,7 +354,7 @@ costly() {
 # which is the shape of a green check that proves nothing.
 check_calls() {
   on_mock && { check "$@"; return 0; }
-  skip "$1 (needs the lab control plane's request log)"
+  skip "$1 (needs the simulator's request log)"
 }
 
 # --- asking the control plane directly --------------------------------------
@@ -362,18 +362,17 @@ check_calls() {
 # A lab asks these when there is no CloudCluster left to read status from, which
 # is exactly the moment worth asking about: did deleting the object destroy the
 # database, is that name taken, how many clusters does the account hold. The
-# stand-in answers from its /_lab surface; a real environment answers from the
+# simulator answers from its /_lab surface; a real environment answers from the
 # same endpoints the operator itself uses.
 
 # cloud_get <path> -> the body, or non-zero having said why.
 #
 # A lab answered with a 429 does not get an error, it gets the 429 body, which
 # parses to an empty string and reads as "no such cluster" or "that name is
-# free". Both are the opposite of the truth, and both would be silent. Measured
-# here: three calls in a row, the second 429.
+# free". Both are the opposite of the truth, and both would be silent.
 #
-# So this is the operator's own rule, borrowed: pace, retry a 429, and treat any
-# other failure as a failure rather than as an answer.
+# So a 429 is retried, and any other failure is a failure rather than an
+# answer.
 cloud_get() {
   local path="$1" attempt=0 code out
   out="$(mktemp)"
@@ -399,7 +398,7 @@ cloud_get() {
 # cloud_products -> one "id name" line per cluster on the account.
 #
 # The two control planes answer different shapes, which is worth knowing rather
-# than hiding: the stand-in's /_lab surface returns full cluster records, while
+# than hiding: the simulator's /_lab surface returns full cluster records, while
 # products/list on a real environment returns only {"id","name"} per entry.
 # Status is in neither list, so ask product_status for that. Terminated clusters
 # stay listed forever on a real account.
@@ -447,9 +446,10 @@ product_ids_named() {
 # running this cluster, whatever Kubernetes thinks.
 #
 # A lab that demonstrates Retain leaves a cluster running on purpose, and the
-# CloudCluster that could have reaped it is gone by then. On the stand-in that
+# CloudCluster that could have reaped it is gone by then. On the simulator that
 # costs nothing and /_lab makes it vanish. On a real account it is a bill nobody
-# is watching, so this asks RavenDB Cloud to terminate it directly.
+# is watching, so this asks RavenDB Cloud to terminate it directly, hidden once
+# it is terminated, as the operator's own terminate asks.
 #
 # The terminate endpoint takes a body: a bodyless POST is answered 411 Length
 # Required rather than accepted, which is not in the OpenAPI document.
@@ -462,27 +462,69 @@ retire_product() {
   curl -s -o /dev/null --max-time 25 -X POST \
     -H "X-API-Key: $(cat "$LAB_CLOUD_API_KEY_FILE")" \
     -H "Content-Type: application/json" \
-    --data '{"hideInPortal":false}' \
+    --data '{"hideInPortal":true}' \
     "${LAB_CLOUD_ENDPOINT}/api/v1/products/terminate/$1" >/dev/null 2>&1 || true
   sleep 1.3
 }
 
+# cloud_listed <product-id> -> yes while the cluster is in the account's
+# product list. A cluster the operator terminates is hidden once termination
+# completes, and a hidden cluster leaves the list, which is what frees its name.
+cloud_listed() {
+  if cloud_products | awk -v id="$1" '$1 == id { found = 1 } END { exit !found }'; then
+    echo yes
+  else
+    echo no
+  fi
+}
+
+# cloud_ended <product-id> -> yes once RavenDB Cloud is terminating the
+# cluster, has terminated it, or has terminated and hidden it. The simulator's
+# list is the only place a lab can ask, and a hidden cluster is not in it, so
+# there "not listed" is one of the answers. A real environment answers for a
+# hidden cluster by id.
+cloud_ended() {
+  case "$(product_status "$1")" in
+    Terminating|Terminated) echo yes ;;
+    '') if on_mock; then echo yes; else echo no; fi ;;
+    *) echo no ;;
+  esac
+}
+
+# wait_cloud_unlisted <product-id> [timeout] -> waits until the cluster has
+# left the product list: terminated and hidden.
+wait_cloud_unlisted() {
+  local id="$1" limit="${2:-90}" gap=2
+  if on_cloud; then
+    gap=6
+    [ "$limit" -lt "$LAB_CHANGE_TIMEOUT" ] && limit="$LAB_CHANGE_TIMEOUT"
+  fi
+  local deadline=$((SECONDS + limit))
+  info "waiting for cloud cluster $id to be terminated and hidden (up to ${limit}s)"
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    [ "$(cloud_listed "$id")" = no ] && return 0
+    sleep "$gap"
+  done
+  warn "cloud cluster $id is still listed, as $(product_status "$id")"
+  return 1
+}
+
 # needs_mock <what> -> true when the step can run here.
 #
-# Some of what these labs show is only arrangeable against the stand-in: a
+# Some of what these labs show is only arrangeable against the simulator: a
 # cluster deleted behind the operator back, a portal edit, an API that fails
 # once. Skipping is reported, never silent, because a step that vanishes without
 # saying so turns a narrower run into an identical-looking one.
 needs_mock() {
   on_mock && return 0
-  skip "$1 (needs the lab control plane; production has no equivalent)"
+  skip "$1 (needs the simulator; production has no equivalent)"
   return 1
 }
 
 # release <cloudcluster>... -> delete the objects and leave no bill behind.
 #
 # deletionPolicy defaults to Retain, which is right for a user and wrong for a
-# lab that just created a cluster nobody asked to keep. On the stand-in this is
+# lab that just created a cluster nobody asked to keep. On the simulator this is
 # free either way; on a real account it is the difference between tidying up and
 # walking away from a running cluster.
 release() {
@@ -501,7 +543,7 @@ secret_value() {
   kubectl -n "$LAB_NAMESPACE" get secret "$1" -o jsonpath="{.data.$2}" 2>/dev/null | base64 -d 2>/dev/null || true
 }
 
-# --- lab control plane helpers ---------------------------------------------
+# --- simulator helpers ---------------------------------------------
 #
 # These reach the mock's /_lab surface, which is how a lab simulates something
 # happening outside Kubernetes: a portal edit, a deletion, an API outage.
@@ -547,16 +589,16 @@ lab_api() {
     fi
     sleep 1
   done
-  warn "lab control plane did not answer $method $path after 4 attempts"
+  warn "simulator did not answer $method $path after 4 attempts"
   return 1
 }
 
 # Opens a port-forward to the mock control plane and closes it on exit.
 LAB_PF_PID=''
 
-# try_portforward -> true once the stand-in answers through a forward on
+# try_portforward -> true once the simulator answers through a forward on
 # LAB_PORT. False as soon as it is clear it never will on that port: the
-# forward could not bind, or the port answers but not as the stand-in, which is
+# forward could not bind, or the port answers but not as the simulator, which is
 # another program listening there.
 try_portforward() {
   kubectl -n "$LAB_CLOUD_NAMESPACE" port-forward svc/mockcloud "${LAB_PORT}:80" >/dev/null 2>&1 &
@@ -586,14 +628,14 @@ open_cloud_portforward() {
   local attempt
   for attempt in 1 2 3 4 5; do
     if try_portforward; then
-      note "port-forward to the lab control plane on localhost:${LAB_PORT}"
+      note "port-forward to the simulator on localhost:${LAB_PORT}"
       return 0
     fi
     close_cloud_portforward
     LAB_PORT=$((LAB_PORT + 10))
     note "that port is taken, trying localhost:${LAB_PORT}"
   done
-  echo "could not reach the lab control plane through the port-forward" >&2
+  echo "could not reach the simulator through the port-forward" >&2
   return 1
 }
 
@@ -635,14 +677,12 @@ require_current_crds() {
     1)
       echo "The CRDs in the cluster are older than config/crd/bases." >&2
       echo "Run 'make install' to apply them, or labs/00_setup.sh for everything." >&2
-      printf '%s
-' "$out" | head -20 >&2
+      printf '%s\n' "$out" | head -20 >&2
       exit 1
       ;;
     *)
       echo "Could not compare CRDs against the cluster:" >&2
-      printf '%s
-' "$out" | head -5 >&2
+      printf '%s\n' "$out" | head -5 >&2
       exit 1
       ;;
   esac

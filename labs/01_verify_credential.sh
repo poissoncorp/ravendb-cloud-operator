@@ -145,7 +145,7 @@ if on_mock; then
   REQUEST_LOG="$(lab_api GET '/_lab/requests?path=/api/v1/account/info')"
   check_contains "the caller identifies itself" "ravendb-cloud-operator" "$REQUEST_LOG"
 else
-  skip "the User-Agent the operator sends (needs the lab control plane's request log)"
+  skip "the User-Agent the operator sends (needs the simulator's request log)"
 fi
 
 # domainName can only have come from the response body, so it is a second,
@@ -180,7 +180,7 @@ check_contains "Azure regions" "westeurope"    "$AZURE_REGIONS"
 check "eu-central-1 is not an Azure region" no "$(contains "$AZURE_REGIONS" "eu-central-1")"
 # Channel names are ReleaseChannelName members, because production parses the
 # value back into that enum and 400s anything else. "Stable", "LTS" and
-# "Development" were invented by the old stand-in, and this lab asserted them,
+# "Development" were invented by the old simulator, and this lab asserted them,
 # so a repo check was pinning a name a real create rejects.
 check_contains "release channels" "Stable72" "$CHANNELS"
 check_contains "release channels" "Stable62" "$CHANNELS"

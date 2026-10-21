@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 #
-# Stage 0: a read-only smoke test against a real RavenDB Cloud environment.
+# Stage 0: a read-only smoke test against RavenDB Cloud.
 #
-#   RAVENDB_CLOUD_ENDPOINT=<the control plane to check> \
-#   RAVENDB_CLOUD_API_KEY=... \
-#     labs/e2e_smoke.sh
+#   RAVENDB_CLOUD_API_KEY=... labs/e2e_smoke.sh
 #
 # ============================================================================
 # THIS SCRIPT NEVER WRITES TO RAVENDB CLOUD.
@@ -46,17 +44,8 @@ SMOKE_SECRET=smoke-real-api-key
 
 # --- preconditions ----------------------------------------------------------
 
-# The endpoint is deliberately not defaulted. Defaulting it would make it one
-# typo away from pointing a test run at the production control plane.
-if [ -z "${RAVENDB_CLOUD_ENDPOINT:-}" ]; then
-  cat >&2 <<'EOF'
-RAVENDB_CLOUD_ENDPOINT is not set, and this script will not guess it.
-Set it to the control plane you mean to check, for example:
-
-  export RAVENDB_CLOUD_ENDPOINT=https://api.cloud.ravendb.net
-EOF
-  exit 2
-fi
+# Every request here is a GET, so production is a safe default.
+: "${RAVENDB_CLOUD_ENDPOINT:=https://api.cloud.ravendb.net}"
 
 # The key can also come from a file, which is the better option when somebody
 # other than its owner runs the script: the secret then never passes through a

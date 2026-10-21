@@ -23,7 +23,7 @@ BAD=lab05-offmenu
 # apply, a shrink refused, an off-menu size refused, a restart. Only node scaling
 # needs Production, because every Development shape is exactly one node.
 #
-# Against the stand-in, and against a real account with LAB_BUDGET=full, that is
+# Against the simulator, and against a real account with LAB_BUDGET=full, that is
 # a three node Production cluster. Against a real account by default it is the
 # smallest Development shape pair whose menus let every step happen: Dev20 sells
 # {10, 20, 30, 40, 50}, Dev30 sells {10, 20, 30, 50, 75}, so 30 is on both and
@@ -43,12 +43,10 @@ scales() { [ "$TIER" = Production ]; }
 
 # RavenDB Cloud allows one storage change per cluster every 6h05m on AWS and
 # 12h05m on Azure SsdPremium, counted from when the previous change was made
-# (verified against RavenDB Cloud's source). This lab
-# used to make two storage changes minutes apart, and against the real service
-# the second was refused. The stand-in enforces the
-# same window now, so both runs make one storage change, in the combined change
-# that carries this lab's main claim, and then show what a second one inside
-# the window does. An instance type change does not count against the limit.
+# (verified against RavenDB Cloud's source), and the simulator enforces the
+# same window. So the lab makes one storage change, in the combined change that
+# carries its main claim, and then shows what a second one inside the window
+# does. An instance type change does not count against the limit.
 #
 # The combined change starts from DISK1, which also keeps a Production run's
 # intermediate size on both PB10's and PB20's menus, since 20 is the only size
@@ -71,9 +69,9 @@ metadata:
 spec:
   accountRef:
     name: ravendb-cloud
-  # Poll faster than the 5m default so this lab does not sit waiting. Since
-  # the operator now honours a shorter pollInterval mid-change too, this also
-  # sets how fast each of the seven applies below converges.
+  # Poll faster than the 300 second default so this lab does not sit
+  # waiting. A shorter interval also applies while a change is in progress,
+  # so this sets how fast each of the applies below converges.
   pollIntervalSeconds: $POLL
   tier: $TIER
   instanceType: $instance
@@ -482,7 +480,6 @@ check_contains "it says what holds it back" "has managementPolicy Observe, so th
 check_contains "and what lets it run"       "Set spec.managementPolicy to Full and this runs" "$WAITING_MSG"
 check "nothing was asked of RavenDB Cloud yet" "" "$(jp cloudclusterrestart lab05-restart .status.issuedAt)"
 check_calls "restart calls while it waits" 0 "$(count_calls /api/v1/products/restart-node)"
-note "it used to fail here, and a restart runs once, so failing meant writing another one."
 note "Waiting keeps the request and carries it out the moment the policy allows"
 
 info "managementPolicy Full: the restart runs without anybody touching it"
@@ -593,7 +590,7 @@ check "the CloudCluster object is gone"    "" "$(jp cloudcluster "$CLUSTER" .met
 check "the rejected object is gone too"    "" "$(jp cloudcluster "$BAD" .metadata.name)"
 
 if on_mock; then
-  info "removing the simulated cluster $PRODUCT_ID from the lab control plane"
+  info "removing the simulated cluster $PRODUCT_ID from the simulator"
   lab_api POST "/_lab/clusters/$PRODUCT_ID/vanish" >/dev/null 2>&1 || true
   check "no lab05 cluster left in the control plane" "" "$(lab_cluster_ids "$CLUSTER")"
 else

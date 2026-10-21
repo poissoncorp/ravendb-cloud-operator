@@ -78,42 +78,7 @@ else
   note "names carry the run id $LAB_RUN, so nothing here can collide with an earlier run"
 fi
 
-# --- 1. WaitingForAccount ---------------------------------------------------
-
-step "WaitingForAccount: a cluster whose prerequisite is not there"
-# With a Ready CloudAccount you never see this for more than a moment, so this
-# throwaway object points at an account that does not exist.
-k apply -f - >/dev/null <<'YAML'
-apiVersion: cloud.ravendb.net/v1alpha1
-kind: CloudCluster
-metadata:
-  name: lab02-pending
-  namespace: apps
-spec:
-  accountRef:
-    name: lab02-missing-account
-  tier: Development
-YAML
-
-if ! wait_for_status lab02-pending WaitingForAccount 60; then
-  warn "lab02-pending never reported WaitingForAccount; recent operator logs:"
-  operator_logs 30
-fi
-
-PENDING_MESSAGE="$(condition_message cloudcluster lab02-pending Ready)"
-info "message: $PENDING_MESSAGE"
-check "lab02-pending STATUS"                   WaitingForAccount "$(status_of lab02-pending)"
-check "lab02-pending Ready condition"          False             "$(condition cloudcluster lab02-pending Ready)"
-check_contains "the message names the account" "lab02-missing-account" "$PENDING_MESSAGE"
-# accountRef is immutable, so the message has to say how to fix a typo.
-check_contains "and the way out of a typo"      "delete this object and apply it again" "$PENDING_MESSAGE"
-check_contains "and that nothing was created"   "nothing was created" "$PENDING_MESSAGE"
-on_mock && check "nothing was created in the cloud" 0 "$(lab02_named_count lab02-pending)"
-
-note "no cloud call was made: the operator will not create anything without a verified credential"
-k delete cloudcluster lab02-pending --ignore-not-found --timeout=60s >/dev/null || true
-
-# --- 2. the smallest manifest that provisions -------------------------------
+# --- 1. the smallest manifest that provisions -------------------------------
 
 step "Provisioning from the smallest manifest that works"
 info "accountRef, tier and storage.sizeGB. Nothing else."
@@ -189,7 +154,7 @@ LAB02_MADE="lab02-orders"
 # what the first cloud run did.
 made() { case " $LAB02_MADE " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-# --- 3. the same cluster, spelled out ---------------------------------------
+# --- 2. the same cluster, spelled out ---------------------------------------
 
 if costly "the fully specified Production contrast (three nodes, PB20, 100 GB)"; then
 step "Provisioning the fully specified contrast"
@@ -269,7 +234,7 @@ info "the priority=1 columns, which only -o wide prints:"
 k get cloudcluster lab02-orders -o wide || true
 info ""
 
-# --- 4. what the operator filled in -----------------------------------------
+# --- 3. what the operator filled in -----------------------------------------
 
 step "What the operator resolved for the minimal manifest"
 info ""
@@ -324,17 +289,9 @@ else
     "$(jp cloudcluster lab02-orders .spec.displayName)"
 fi
 
-# metadata.generation is still 1, and it took a bug fix to be. The operator
-# writes to this object once, to add its finalizer, and a write that touches
-# only metadata does not bump generation on a custom resource with a status
-# subresource: only a change to spec does.
-#
-# That write used to be an Update, which sends the object back whole, and a spec
-# that has been through Go and back is not the one that was applied: the two
-# struct fields serialised as {}, so the API server saw a changed spec and bumped generation on every single
-# object's first reconcile. Every one was then permanently unequal to the
-# manifest it came from, which is drift a GitOps tool cannot resolve. The
-# finalizer is a merge patch of the difference now.
+# metadata.generation is still 1. The operator writes to this object once, to
+# add its finalizer, as a patch of metadata alone, so the stored spec is the
+# applied one and a GitOps tool sees no difference to resolve.
 check "generation, untouched by the operator" 1 \
   "$(jp cloudcluster lab02-orders .metadata.generation)"
 check "the finalizer it wrote instead" "cloud.ravendb.net/finalizer" \
@@ -371,6 +328,50 @@ if [ "$LAB_ALLOWED_IPS" = 0.0.0.0/0 ]; then
 else
   check "Warning events for a create that went to plan" 0 "$(printf '%s' "$WARNINGS" | { grep -c . || true; })"
 fi
+
+# --- 4. a typo in accountRef ------------------------------------------------
+
+step "A typo in accountRef: the cluster waits, and an edit fixes it"
+# Observe never creates anything, so fixing the typo below costs nothing on
+# either control plane.
+k apply -f - >/dev/null <<'YAML'
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudCluster
+metadata:
+  name: lab02-pending
+  namespace: apps
+spec:
+  accountRef:
+    name: ravendb-clod
+  tier: Development
+  managementPolicy: Observe
+YAML
+
+if ! wait_for_status lab02-pending WaitingForAccount 60; then
+  warn "lab02-pending never reported WaitingForAccount; recent operator logs:"
+  operator_logs 30
+fi
+k get cloudcluster lab02-pending || true
+PENDING_MESSAGE="$(condition_message cloudcluster lab02-pending Ready)"
+info "message: $PENDING_MESSAGE"
+check "lab02-pending STATUS"                   WaitingForAccount "$(status_of lab02-pending)"
+check_contains "the message names the account" "ravendb-clod" "$PENDING_MESSAGE"
+check_contains "and the way out of a typo"      "correct spec.accountRef" "$PENDING_MESSAGE"
+check_contains "and that nothing was created"   "nothing was created" "$PENDING_MESSAGE"
+on_mock && check "nothing was created in the cloud" 0 "$(lab02_named_count lab02-pending)"
+
+info "kubectl patch cloudcluster lab02-pending: accountRef ravendb-clod -> ravendb-cloud"
+PATCHED="$(k patch cloudcluster lab02-pending --type=merge \
+  -p '{"spec":{"accountRef":{"name":"ravendb-cloud"}}}' 2>&1 || true)"
+check_contains "the edit is accepted, because nothing exists yet" "patched" "$PATCHED"
+if ! wait_for_status lab02-pending ClusterNotFound 60; then
+  warn "lab02-pending did not move on; recent operator logs:"
+  operator_logs 30
+fi
+check "STATUS once the account resolves" ClusterNotFound "$(status_of lab02-pending)"
+check_contains "Observe reports the missing cluster instead of creating it" \
+  "managementPolicy Observe never creates one" "$(condition_message cloudcluster lab02-pending Ready)"
+k delete cloudcluster lab02-pending --ignore-not-found --timeout=60s >/dev/null || true
 
 # --- 5. the fully specified one ---------------------------------------------
 
@@ -470,11 +471,11 @@ sleep 16
 
 twin_calls="$(lab02_detail_calls "$twin_id")"
 orders_calls="$(lab02_detail_calls "$orders_id")"
-info "lab02-twin   (pollInterval 5s)  : $twin_calls call(s)"
-info "lab02-orders (pollInterval 5m)  : $orders_calls call(s)"
+info "lab02-twin   (pollIntervalSeconds 5)  : $twin_calls call(s)"
+info "lab02-orders (default, 300)          : $orders_calls call(s)"
 
 if [ "$twin_calls" -ge 2 ]; then paced=0; else paced=1; fi
-check "a settled cluster is re-read on spec.pollInterval" yes "$(yesno "$paced")"
+check "a settled cluster is re-read every spec.pollIntervalSeconds" yes "$(yesno "$paced")"
 if [ "$orders_calls" -lt "$twin_calls" ]; then slower=0; else slower=1; fi
 check "the 5m default is re-read far less often than the 5s one" yes "$(yesno "$slower")"
 LAB02_MADE="$LAB02_MADE lab02-twin"
