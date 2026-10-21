@@ -53,8 +53,11 @@ the operator has done what `deletionPolicy` asks. While it waits, STATUS is
 - **The account's key now belongs to another RavenDB Cloud account.** The
   operator does not terminate through it, since that account has no such
   cluster. Put the right key back, or set `Retain`.
-- **RavenDB Cloud refuses to terminate.** The message quotes it, and the
-  operator asks again every poll.
+- **RavenDB Cloud refuses to terminate.** The message quotes it. A rejected
+  key is tried again every poll, so putting a working key in the Secret is
+  enough. Any other refusal is not retried on a timer: fix what it names in the
+  portal and edit the object, or set `Retain` to let it go and leave the
+  cluster running.
 
 Removing the finalizer by hand releases the object at once and leaves the
 cluster running and billed, named only in events that expire within the hour.

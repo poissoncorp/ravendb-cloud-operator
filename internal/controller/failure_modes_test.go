@@ -821,3 +821,35 @@ func TestAKeyForAnotherAccountLeavesTheClusterAlone(t *testing.T) {
 		t.Errorf("Ready = %q, want Deleting while the keys differ", got)
 	}
 }
+
+// A refused terminate was sent again on every poll, though RavenDB Cloud
+// answers it the same way each time. A rejected key is different: a new key
+// wakes the account, not this object, so only a timer notices it.
+func TestARefusedTerminateWaitsAndARejectedKeyPolls(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		want   time.Duration
+	}{
+		{http.StatusBadRequest, 0},
+		{http.StatusUnauthorized, 5 * time.Minute},
+	} {
+		t.Run(http.StatusText(tc.status), func(t *testing.T) {
+			h := newHarness(t, credentialSecret(), readyAccount(), provisionCluster("orders", func(c *v1alpha1.CloudCluster) {
+				c.Spec.DeletionPolicy = v1alpha1.DeletionTerminate
+			}))
+			h.reconcileClusterUntilSettled("orders", 6)
+			if err := h.k8s.Delete(context.Background(), h.getCluster("orders")); err != nil {
+				t.Fatalf("deleting: %v", err)
+			}
+			h.cloud.FailNext("TerminateCluster", tc.status)
+
+			result := h.reconcileCluster("orders")
+			if result.RequeueAfter != tc.want {
+				t.Errorf("RequeueAfter = %v, want %v", result.RequeueAfter, tc.want)
+			}
+			if got := condition(t, h.getCluster("orders"), v1alpha1.ConditionReady).Reason; got != v1alpha1.ReasonDeleting {
+				t.Errorf("Ready = %q, want Deleting", got)
+			}
+		})
+	}
+}
