@@ -16,33 +16,58 @@ never drops another controller's finalizer.
 
 `deletionPolicy` defaults to `Retain`: deleting the object leaves the cluster
 running and records a Normal `Retained` event naming it. `Terminate` ends the
-cluster, after a Normal `Terminating` event, and only for:
+cluster the object holds, after a Normal `Terminating` event, whether the
+object created it or took it over. `managementPolicy` has no say: `Observe`
+with `Terminate` still terminates.
 
-- a cluster this object created, or
-- one it took over under `creationMode: TakeOverOnly`.
+It does not matter how the object came to hold the cluster because only status
+records that, and a restore from git or a backup loses status. A Terminate that
+worked only on a cluster the object remembered creating would leave it running
+and billed after a restore. What guards against ending a cluster nobody meant to
+hold is the take-over itself: a found cluster must match the manifest, and one
+taken over under the default `TakeOverOrCreate` records a Warning saying to set
+`Retain` before deleting the object if the cluster is not meant to be its own.
 
-A cluster taken over under the default `TakeOverOrCreate` is left running with a
-Warning `Retained` that says why (`keepsWhatItTookOver`): a name can match a
-cluster nobody meant this object to own, and a name alone must not be enough to
-destroy one. `managementPolicy` has no say: `Observe` with `Terminate` under
-`TakeOverOnly` still terminates.
+The terminate asks RavenDB Cloud to hide the product in the portal. RavenDB
+Cloud does that once termination completes, which frees the display name, so a
+manifest deleted with `Terminate` and applied again gets a new cluster under the
+same name. A terminate answered 404 or 410 counts as done.
 
 `nothingToTerminate` short-cuts the finalizer when there is nothing in RavenDB
-Cloud to act on: `Retain`, a cluster already gone, one this object may not
-terminate, or an object that never bound and never sent a create. An object
-with a create stamp and no binding looks its attempted name up first
-(`findInterruptedCreate`), so a create whose answer was lost is still found and
-terminated, and a cluster another object holds or that does not match is not.
+Cloud to act on: `Retain`, a cluster already gone (`goneFromCloud`: a
+`cloudStatus` of Terminating or Terminated, or Ready `DeletedInCloud`), or an
+object that never bound and never sent a create. An object with a create stamp
+and no binding looks its attempted name up first (`findInterruptedCreate`), so
+a create whose answer was lost is still found and terminated, and a cluster
+another object holds or that does not match is not. Two clusters by that name
+leave it in `Deleting`, with the advice to hide the one that is not this
+object's.
+
+A terminate that fails keeps the object in `Deleting`, with a Warning saying
+why, until it goes through.
 
 ## When the account cannot be used
 
-Terminating needs the API key. If the CloudAccount or its Secret is missing:
+Terminating needs the API key, but not a Ready account. `clientForDeletion`
+builds a client from the Secret whatever the account's condition says, so a key
+RavenDB Cloud no longer accepts shows up as a failed terminate. A teardown such
+as `kubectl delete namespace` removes the Secret, the account and the cluster in
+no particular order; when the Secret is already gone, the client built from it
+before (`Clients.LastFor`) still holds the key. That client lives in memory, so
+it is gone once the operator restarts.
+
+With no client at all, a missing account, or a Secret gone and the operator
+restarted since:
 
 - with nothing to terminate, the finalizer is released and the object goes;
-- with something to terminate, the object stays in `Deleting` and says which
-  of the account or its Secret to restore, or to set `Retain`;
-- if the Secret went in the same delete as the account and its clusters, the
-  client built before still holds the key (`Clients.LastFor`), and that is used.
+- with something to terminate, the object stays in `Deleting` and says to
+  restore whichever is missing, or to set `Retain`.
+
+If the account's key now answers for another RavenDB Cloud account than the one
+the cluster was bound in (`status.accountDomain`), `Retain` releases as usual
+and `Terminate` stays in `Deleting`: in that account a terminate would end
+nothing and then release the object, leaving the cluster billed with no object
+to name it.
 
 Removing the finalizer by hand releases the object and orphans the cluster:
 running, billed, and named only in events that expire.

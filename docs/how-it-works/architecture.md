@@ -5,14 +5,14 @@ RavenDB Cloud comes through `cloudapi.Client`; everything it promises a user is
 in the three CRDs.
 
 ```
-CloudAccount ──┐
-               ├─> internal/cloudclients.Cache ──> cloudapi.Client (interface)
-CloudCluster ──┘                                        │
-                                                        └── rest.go  the one implementation
-                                                                     │
-                                                     ┌───────────────┴───────────────┐
-                                            api.cloud.ravendb.net        internal/cloudsim
-                                              (production)                (tests and labs)
+CloudAccount ────────┐
+CloudCluster ────────┼─> internal/cloudclients.Cache ──> cloudapi.Client (interface)
+CloudClusterRestart ─┘                                        │
+                                                              └── rest.go  the one implementation
+                                                                           │
+                                                           ┌───────────────┴───────────────┐
+                                                  api.cloud.ravendb.net        internal/cloudsim
+                                                    (production)                (tests and labs)
 ```
 
 `cloudapi.Client` is the only door to the control plane, and the controllers
@@ -78,18 +78,24 @@ wrong show up somewhere specific:
 
 1. Add the finalizer, before anything else.
 2. Read the CloudAccount and get its client ([accounts-and-credentials.md](accounts-and-credentials.md)).
-3. If the object is being deleted, honour `deletionPolicy` and stop
+   A deletion takes the client without waiting for the account to be Ready.
+3. Stop if the account's key now answers for another account than the one the
+   cluster was bound in (`status.accountDomain`).
+4. If the object is being deleted, honour `deletionPolicy` and stop
    ([deletion.md](deletion.md)).
-4. Bind: find the cluster by name, check it is the one the manifest describes,
-   or create one ([identity-and-takeover.md](identity-and-takeover.md)).
-5. Read the cluster and copy what it is into status.
-6. Publish the connection Secret ([connection-secret.md](connection-secret.md)).
-7. Compare the manifest with the cluster and apply at most one change
+5. Bind: find the cluster by name, check it is the one the manifest describes,
+   or create one ([identity-and-takeover.md](identity-and-takeover.md)). A
+   create stamps status first, in a write of its own (`writeStatusNow`).
+6. Read the cluster and copy what it is into status. A cluster that is not
+   Active ends the pass here, with the reason on Ready.
+7. Publish the connection Secret ([connection-secret.md](connection-secret.md)).
+   If that fails, the pass ends here.
+8. Compare the manifest with the cluster and apply at most one change
    ([changes-and-drift.md](changes-and-drift.md)).
-8. Write status once, set the conditions, and requeue
+9. Write status, if it changed, set the conditions, and requeue
    ([status-events-and-logs.md](status-events-and-logs.md)).
 
-Every call in steps 2 to 7 goes through the client, paced and classified
+Every call in steps 2 to 8 goes through the client, paced and classified
 ([calling-ravendb-cloud.md](calling-ravendb-cloud.md)). A pass has a deadline;
 a requeue on a timer waits behind changes people make.
 
@@ -107,28 +113,35 @@ from RavenDB Cloud.
 **Defaults are the safe answer, not the convenient one.**
 `deletionPolicy` defaults to `Retain`, so `kubectl delete cloudcluster` drops the
 Kubernetes object and leaves the database running. Destroying a paid production
-cluster requires writing `deletionPolicy: Terminate` on purpose, and even then
-it ends only a cluster the object created, or one it took over under
-`creationMode: TakeOverOnly`, whatever `managementPolicy` says. A found cluster defaults to
+cluster requires writing `deletionPolicy: Terminate` on purpose; then it ends
+the cluster the object holds, created or taken over, whatever
+`managementPolicy` says. It cannot depend on which of the two happened, because
+only status records that and a restore loses status. A found cluster defaults to
 `managementPolicy: Observe`, because finding a cluster you did not create should
-not hand a controller permission to resize it on the next reconcile.
+not hand a controller permission to resize it on the next reconcile, and a
+take-over the manifest did not ask for records a Warning saying how to let go of
+the cluster without ending it.
 
 **The CRD refuses what the cloud cannot do.**
 RavenDB Cloud can change a cluster's instance type, storage and node count. It
-cannot move one between providers, regions or tiers, and it cannot rename one.
-Those fields are immutable via CEL, so you get a rejection with a reason instead
-of a manifest that differs forever. `subdomain` and `displayName` are pinned
-harder still: they cannot be added after the fact either, because both feed the
-create call and `displayName` is what the operator finds the cluster by.
+cannot move one between accounts, providers, regions or tiers, and it cannot
+rename one. Once the object has found or created its cluster, CEL rules on the
+object fix those fields, so you get a rejection with a reason instead of a
+manifest that differs forever. `subdomain` and `displayName` are pinned harder
+still: after that `subdomain` cannot be added either, and `displayName` only as
+the object name it already defaulted to, because both feed the create call and
+`displayName` is what the operator finds the cluster by.
 
 ```
-The CloudCluster "orders-prod" is invalid: spec.region: Invalid value: "object":
-region is immutable: create a new CloudCluster instead
+spec.region: Invalid value: "object": region cannot change or be removed once
+this object has found or created its cluster: RavenDB Cloud cannot move a
+cluster between regions. ...
 ```
 
-Where a field cannot be edited, the operator's own messages say so too: the
-advice is to delete the object and apply it again, which under the default
-`Retain` touches nothing in RavenDB Cloud.
+Until then nothing exists in RavenDB Cloud, so all of them can be edited, and
+the operator's messages about a field that is wrong at that stage say to set
+it. After that, the advice is to delete the object and apply it again, which
+under the default `Retain` touches nothing in RavenDB Cloud.
 
 **Bad input fails before it costs anything.**
 Region is checked against the account's cached region list, and the instance type
@@ -136,8 +149,9 @@ against the live list for that region, before anything is created. The error
 tells you what you could have written:
 
 ```
-region "moon-base-1" is not available for AWS;
-available regions: eu-central-1, eu-west-1, us-east-1, ...
+spec.region is "moon-base-1", which is not available for AWS; available regions:
+eu-central-1, eu-west-1, us-east-1. Set spec.region to one of those; nothing
+was created.
 ```
 
 **Creating is crash-safe without being greedy.**
@@ -156,15 +170,14 @@ installations pointed at one account can both bind the same cluster, and nothing
 Cloud records an owner, so there is nowhere to keep a lease. That risk is accepted because the
 defaults bound it: under `Observe`, the default for a found cluster, both sides only read; under
 `Full` with the same manifest they agree, and with different ones each undoes the other's change
-once per poll and says so. What stays dangerous is `Terminate` on a side allowed to use it, which
-ends the cluster for both.
+once per poll and says so. What stays dangerous is `Terminate` on either side, which ends the
+cluster for both.
 
 **The wire is not the CRD.**
 Domain types are kept apart from wire types so a rename on the cloud side cannot reach the CRD, and
-it already pays for itself twice. The API spells providers `Aws` and `Gcp` while users write `AWS`
-and `GCP`. And product ids on the public API are the short form (`123-A`): the server strips the
-`products/` prefix on the way out and re-adds it on the way in, which the OpenAPI document does not
-say anywhere. Both of those live in `internal/cloudapi/wire.go` and nowhere else.
+it already pays for itself: the API spells providers `Aws` and `Gcp` while users write `AWS` and
+`GCP`, and that lives in `internal/cloudapi/wire.go` and nowhere else. Product ids on the public
+API are the short form (`123-A`), and the operator passes them through unchanged.
 
 **The OpenAPI document is not the whole contract.**
 Four rules matter enough to encode, and none of them are in the spec:
@@ -179,13 +192,15 @@ Four rules matter enough to encode, and none of them are in the spec:
 - The `Free` tier **cannot be created through the API at all**. RavenDB Cloud rejects it on create,
   so a Free CloudCluster never sends a create, and the cheapest thing a real test can create is a
   Development-tier cluster.
-- A display name stays taken after its cluster is terminated, until somebody hides that cluster in
-  the portal (verified against RavenDB Cloud's source). The operator terminates without hiding, so
-  the portal keeps the record, and a create refused on the name says why.
+- A display name stays taken after its cluster is terminated, until that cluster is hidden in the
+  portal (verified against RavenDB Cloud's source). The operator's terminate asks RavenDB Cloud to
+  hide the cluster, which it does once termination completes, so the name comes free. One
+  terminated in the portal keeps it, and a create refused on the name says why.
 
 The lab control plane enforces all four server-side, so the labs fail the same way production would.
 
 **Light on the API.**
-The client paces its own calls, clients are cached per account so that pacing
-survives across reconciles, status-only updates are filtered out of the watch
-so the operator does not trigger itself, and the manager runs a single replica.
+The operator paces its calls: every client shares the one pace
+`cloudclients.Cache` holds, and clients are cached per account. Status-only
+updates are filtered out of the watch so the operator does not trigger itself,
+and the manager runs a single replica.
