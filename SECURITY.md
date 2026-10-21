@@ -13,9 +13,11 @@ operator reads it when it builds a client, keeps it in memory, sends it only as
 the `X-Api-Key` header, and never writes it to status, events or logs; a log
 line names a key only by a short hash. A key reaches every cluster in its
 account, and RavenDB Cloud has no narrower one, so whoever may create a
-CloudCluster next to a CloudAccount can name any cluster in that account. Put
-an account only in a namespace where everyone who can write CloudClusters may
-manage every cluster in it.
+CloudCluster next to a CloudAccount can name any cluster in that account that
+no other CloudCluster holds: receive its client certificate, reshape it under
+`managementPolicy: Full`, and terminate it by deleting the object under
+`deletionPolicy: Terminate`. Put an account only in a namespace where everyone
+who can write CloudClusters may manage every cluster in it.
 
 **Write access to Secrets.** Publishing connection details is what the
 operator is for. The connection Secret holds each cluster's client

@@ -55,6 +55,5 @@ spec:
 #                    changes nothing, until spec.managementPolicy is Full.
 #
 # deletionPolicy defaults to Retain, so deleting this object leaves the cluster
-# running. Terminate would terminate it on delete, Observe or not, because
-# TakeOverOnly says taking it over was meant. A cluster found under the default
-# TakeOverOrCreate is never terminated, only left running with a Warning.
+# running. With Terminate, deleting it would end the cluster, Observe or not:
+# Terminate ends whatever cluster the object holds.

@@ -9,12 +9,12 @@ applying new ones, and nothing in RavenDB Cloud changes.
 
 1. Set `deletionPolicy: Retain` on every object that says `Terminate`.
    Skipping this terminates those clusters in step 3.
-2. Write the new manifests. `kubectl ravendb-cloud export` reads the running clusters
-   and writes each with `creationMode: TakeOverOnly`.
+2. Write the new manifests. `kubectl ravendb-cloud export` reads the running
+   clusters and writes each with `managementPolicy: Full` and
+   `creationMode: TakeOverOnly`.
 3. Delete the old objects. The clusters keep running. Their connection Secrets
-   go with them: pods already running keep what they read, and a pod starting
-   before step 5 waits for its Secret.
-4. Install the new CRDs and operator.
+   go with them: pods already running keep running, and a pod starting before
+   step 5 waits for its Secret.
+4. Install the new CRDs and operator ([install.md](install.md#upgrading-the-operator)).
 5. Apply the new manifests. Each takes its cluster over by name and publishes
-   its Secret again, and under `TakeOverOnly` a `Terminate` written there means
-   what it says.
+   its Secret again. Put `deletionPolicy: Terminate` back where you want it.

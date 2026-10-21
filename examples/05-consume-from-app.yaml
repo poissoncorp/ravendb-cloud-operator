@@ -1,16 +1,18 @@
 # The payoff: an application that never touches the RavenDB Cloud portal.
 #
-# The operator writes <cluster>-connection with the endpoints and the client
-# certificate, unpacked from the archive RavenDB Cloud serves. The pod mounts it
-# and is done. No manual download, no copying a .pfx into a Secret by hand, no
-# rebuild when the cluster gains a node. It is the same Secret whether the
-# CloudCluster created its cluster, took it over, or only observes it.
+# For every CloudCluster the operator writes a Secret named
+# <object name>-connection, or spec.connectionSecret.name, with the node
+# addresses and the client certificate. This Deployment uses orders-prod from
+# 02-provision-production.yaml, which names its Secret orders-prod-connection;
+# for orders-dev from 01-provision-minimal.yaml it is orders-dev-connection.
+# It is the same Secret whether the CloudCluster created its cluster, took it
+# over, or only observes it.
 #
 # Keys in the connection Secret:
 #
-#   url                       first node endpoint
-#   urls                      all node endpoints, comma separated
-#   nodeTags                  RavenDB node tags (A,B,C), aligned with urls
+#   url                       first node address
+#   urls                      all node addresses, comma separated
+#   nodeTags                  RavenDB node tags (A,B,C), in the order of urls
 #   studioURL                 RavenDB Studio address
 #   productID                 RavenDB Cloud cluster id
 #   tls.crt                   client certificate, PEM
@@ -19,6 +21,19 @@
 #   client.pfx                PKCS#12, no password
 #   client.with-password.pfx  PKCS#12, protected
 #   certificate.password      password for the protected PKCS#12
+#
+# The whole Secret is mounted as files, which follow it: a new node or a
+# renewed certificate reaches the pod without redeploying. An environment
+# variable taken from it with secretKeyRef is read once, at container start.
+#
+# The application reads /etc/ravendb/urls and /etc/ravendb/client.pfx (.NET) or
+# /etc/ravendb/client.pem (Node.js) when it opens its document store;
+# docs/how-to-use/connecting-applications.md has the code. RavenDB clients read
+# no environment variable of their own, so RAVENDB_DATABASE below is this
+# application's setting, not the client's.
+#
+# The certificate has Operator clearance: it administers every database on the
+# cluster. Every pod that can read this Secret has that.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,32 +49,25 @@ spec:
       labels:
         app: orders-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        # The Secret's files are owned by root and readable by group (0440
+        # below); fsGroup makes that group this one, so the non-root process
+        # can read them.
+        fsGroup: 1000
       containers:
         - name: api
           image: ghcr.io/acme/orders-api:1.4.2
           env:
-            # RavenDB clients take a list of node URLs.
-            - name: RAVENDB_URLS
-              valueFrom:
-                secretKeyRef:
-                  name: orders-prod-connection
-                  key: urls
-            # Point the client at the mounted PEM material.
-            - name: RAVENDB_CERT_PATH
-              value: /etc/ravendb/tls.crt
-            - name: RAVENDB_KEY_PATH
-              value: /etc/ravendb/tls.key
+            - name: RAVENDB_DATABASE
+              value: orders
           volumeMounts:
-            - name: ravendb-cert
+            - name: ravendb
               mountPath: /etc/ravendb
               readOnly: true
       volumes:
-        - name: ravendb-cert
+        - name: ravendb
           secret:
             secretName: orders-prod-connection
-            defaultMode: 0400
-            items:
-              - key: tls.crt
-                path: tls.crt
-              - key: tls.key
-                path: tls.key
+            defaultMode: 0440

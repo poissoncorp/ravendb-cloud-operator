@@ -30,10 +30,10 @@ The name is a safe identity because RavenDB Cloud makes it one. Display names
 are unique per account among clusters not hidden in the portal, terminated ones
 included (RavenDB Cloud checks this on every create, verified against its
 source), and nothing renames a cluster after it is created. So a name
-picks out one cluster for as long as that cluster exists, and `displayName` is
-immutable here for the same reason.
+picks out one cluster for as long as that cluster exists, and `displayName`
+cannot change here once the object has its cluster, for the same reason.
 
-Five rules follow, and they are the whole of it:
+Six rules follow, and they are the whole of it:
 
 - **Only what the manifest says is managed.** A field left out is left as the
   cluster has it. On a cluster the operator creates it gets a default, which
@@ -42,21 +42,23 @@ Five rules follow, and they are the whole of it:
   nothing in RavenDB Cloud, creating included. Anything the manifest sets that
   differs is reported, not applied, until `spec.managementPolicy` is `Full`.
 - **You choose what a name may do.** `creationMode` is `TakeOverOrCreate` by
-  default. `TakeOverOnly` never creates, and `CreateOnly` never takes over.
-  `deletionPolicy: Terminate` ends a cluster the object created, or one it took
-  over under `TakeOverOnly`; a cluster found under the default is left running.
-  A takeover under the default raises a Warning, and changing the mode to
+  default. `TakeOverOnly` never creates, and `CreateOnly` never takes over. A
+  takeover under the default raises a Warning, and changing the mode to
   `TakeOverOnly` afterwards confirms it was meant.
+- **Deleting keeps the cluster unless you say otherwise.** `deletionPolicy` is
+  `Retain` by default. `Terminate` ends whatever cluster the object holds,
+  created or taken over, and RavenDB Cloud then hides it, which frees its name
+  for a new one.
 - **Free can only be found.** The API refuses to create a Free cluster, so a
   `tier: Free` CloudCluster reports `ClusterNotFound` until one by its name
-  exists in the portal, and then binds to it.
+  exists in the portal, and then takes it over.
 - **Git is enough to rebuild.** Lose the Kubernetes cluster, apply the same
   manifests to a new one, and every object finds its cluster again. Write
-  `managementPolicy: Full` and `creationMode: TakeOverOnly` in manifests you
-  keep in git, as the export tool does: a restored object cannot know it
-  created its cluster, so without the first it would resume under `Observe`,
-  and without the second a name that finds nothing would create an empty
-  cluster in its place.
+  `managementPolicy: Full` in manifests you keep in git, as the export tool
+  does: a restored object cannot know it created its cluster, so without it the
+  cluster comes back under `Observe`. `creationMode: TakeOverOnly`, which the
+  export also writes, makes a name that finds nothing report it instead of
+  creating an empty cluster in its place.
 
 ### How other operators do it
 
@@ -136,6 +138,20 @@ the index.
 [CONTRIBUTING.md](CONTRIBUTING.md) is how to work on the code, and
 [SECURITY.md](SECURITY.md) the security model and how to report a problem.
 
+### With an AI assistant
+
+[`skills/ravendb-cloud-operator`](skills/ravendb-cloud-operator/SKILL.md) is an
+[Agent Skill](https://agentskills.io) for writing and troubleshooting these
+manifests: it gives the assistant the model above and points it at the guides
+in `docs/how-to-use/`. In Claude Code:
+
+```
+/plugin marketplace add ravendb/ravendb-cloud-operator
+/plugin install ravendb-cloud-operator@ravendb-cloud-operator
+```
+
+Other assistants that read Agent Skills can take the same folder.
+
 ## What is deliberately missing
 
 The RavenDB Cloud public API is cluster-scoped. It exposes account info,
@@ -156,7 +172,7 @@ model:
   only. The operator reports the difference on CHANGES as `NotApplied` and tells
   you to fix it in the portal, rather than pretending to reconcile it.
 - **Renaming a cluster.** RavenDB Cloud has no way to, so `displayName` cannot
-  change either.
+  change either once the cluster exists.
 
 Adding CRDs for things the API cannot do would have made the demo look richer
 and the operator lie. Everything modelled here maps to a real endpoint.

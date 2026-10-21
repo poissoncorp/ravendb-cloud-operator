@@ -14,11 +14,12 @@ spec:
 
   # The name in the RavenDB Cloud portal and the cluster's identity. RavenDB
   # Cloud keeps display names unique per account and cannot rename a cluster,
-  # so this can never change here either. Defaults to metadata.name.
+  # so this is fixed once the cluster exists. Defaults to metadata.name.
   displayName: orders-prod
 
-  # Cannot change: RavenDB Cloud cannot move a cluster between tiers, providers
-  # or regions. provider and region default to the CloudAccount's.
+  # Fixed once the cluster exists: RavenDB Cloud cannot move a cluster between
+  # tiers, providers or regions. provider and region default to the
+  # CloudAccount's.
   tier: Production
   provider: AWS
   region: eu-central-1
@@ -46,14 +47,17 @@ spec:
 
   # Full lets the operator create the cluster and change instance type,
   # storage and node count to match this manifest. Left unset, it is Full for a
-  # cluster this object creates and Observe for one it finds already running.
-  # Writing Full down means that if a cluster named orders-prod already exists,
-  # it is taken over and reshaped to this manifest on the first pass.
+  # cluster this object creates and Observe for one it finds already running,
+  # which is what a restored object finds its own cluster to be. So a manifest
+  # kept in git should write Full down. The flip side: if a cluster named
+  # orders-prod already exists, it is taken over and reshaped to this manifest
+  # on the first pass.
   managementPolicy: Full
 
   # Retain is the default, and it means deleting this object leaves the cluster
-  # running. Terminate destroys it on delete, whatever managementPolicy says.
-  # Set it only where losing the data is acceptable.
+  # running. Terminate ends the cluster when the object is deleted, whether the
+  # object created it or took it over, and whatever managementPolicy says. Set
+  # it only where losing the data is acceptable.
   deletionPolicy: Retain
 
   connectionSecret:
