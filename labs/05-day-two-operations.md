@@ -1,5 +1,7 @@
 # Lab 05: resize, rescale and reshape a running cluster
 
+> **Reference:** [Clusters](../docs/how-to-use/clusters.md) and [restarting a node](../docs/how-to-use/restarting-a-node.md) covers the same ground as a guide rather than a walkthrough.
+
 **For:** whoever owns the cluster after it exists. The disk is filling up, the working set
 outgrew 8 GB of RAM, or a read-heavy quarter wants two more nodes. RavenDB Cloud can do
 exactly three things to a live cluster, and this lab drives all three from a manifest and

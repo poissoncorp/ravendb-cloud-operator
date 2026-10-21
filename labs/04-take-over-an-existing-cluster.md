@@ -1,5 +1,7 @@
 # Lab 04: Take over a cluster that already exists
 
+> **Reference:** [Taking over](../docs/how-to-use/taking-over.md) covers the same ground as a guide rather than a walkthrough.
+
 > **Why this lab matters more than it looks.** The obvious framing is "somebody made a cluster
 > in the portal", which is true and forgettable. The version worth remembering is that this is
 > also how a Kubernetes cluster is rebuilt: apply the same manifests to a new one, and every

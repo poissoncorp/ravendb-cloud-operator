@@ -1,5 +1,7 @@
 # Restarting a node
 
+> **See it run:** [Lab 05](../../labs/05-day-two-operations.md) restarts a node, including one held back by the cluster's policy.
+
 One node, restarted once. It is a separate kind rather than a field on
 CloudCluster because a CRD spec describes desired state, and "restart node A"
 is not a state: nothing about the cluster afterwards is different, so no field

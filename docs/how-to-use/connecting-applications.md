@@ -1,5 +1,7 @@
 # Connecting an application
 
+> **See it run:** [Lab 03](../../labs/03-connect-an-application.md) publishes the Secret and has a pod mount it.
+
 The point of the whole thing. RavenDB Cloud serves the client certificate as a
 ZIP holding a PFX pair, PEM material and a password file. The operator unpacks
 it into conventional Kubernetes keys, so a pod just mounts it:

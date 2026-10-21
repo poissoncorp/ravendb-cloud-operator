@@ -1,5 +1,7 @@
 # Lab 01: verify a RavenDB Cloud credential
 
+> **Reference:** [Accounts](../docs/how-to-use/accounts.md) covers the same ground as a guide rather than a walkthrough.
+
 **For:** anyone about to point this operator at a RavenDB Cloud account for the first time.
 A `CloudAccount` is the single place an API key lives, and everything else in the operator
 depends on it being good. By the end you will know what `Ready=True` actually proves, what the
