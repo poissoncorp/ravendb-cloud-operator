@@ -13,8 +13,12 @@ if [ "${1:-}" = "--setup" ]; then
   "$LAB_ROOT/00_setup.sh" || exit 1
 fi
 
-mapfile -t SCRIPTS < <(find "$LAB_ROOT" -maxdepth 1 -name '[0-9][0-9]_*.sh' \
-  ! -name '00_setup.sh' ! -name 'run_all.sh' | sort)
+# while read rather than mapfile, and ${a[@]+"${a[@]}"} for arrays that may be
+# empty: macOS ships bash 3.2, which has no mapfile and, under set -u, calls
+# an empty array unbound.
+SCRIPTS=()
+while IFS= read -r line; do SCRIPTS+=("$line"); done < <(find "$LAB_ROOT" -maxdepth 1 \
+  -name '[0-9][0-9]_*.sh' ! -name '00_setup.sh' ! -name 'run_all.sh' | sort)
 
 if [ "${#SCRIPTS[@]}" -eq 0 ]; then
   echo "no lab scripts found in $LAB_ROOT" >&2
@@ -64,7 +68,7 @@ for script in "${SCRIPTS[@]}"; do
   esac
 done
 
-for script in "${FIRST[@]}"; do
+for script in ${FIRST[@]+"${FIRST[@]}"}; do
   run_one "$script"
 done
 
@@ -76,24 +80,27 @@ if [ "${LAB_TARGET:-mock}" = cloud ] && [ "${LAB_SERIAL:-0}" != "1" ]; then
 fi
 
 if [ "${LAB_SERIAL:-0}" = "1" ] || [ "${#REST[@]}" -le 1 ]; then
-  for script in "${REST[@]}"; do run_one "$script"; done
+  for script in ${REST[@]+"${REST[@]}"}; do run_one "$script"; done
 else
-  for script in "${REST[@]}"; do run_one "$script" & done
+  for script in ${REST[@]+"${REST[@]}"}; do run_one "$script" & done
   wait
 fi
 
 FAILED=()
-if [ -s "$FAILED_FILE" ]; then mapfile -t FAILED < <(sort -u "$FAILED_FILE"); fi
+if [ -s "$FAILED_FILE" ]; then
+  while IFS= read -r line; do FAILED+=("$line"); done < <(sort -u "$FAILED_FILE")
+fi
 PASSED=()
 for script in "${SCRIPTS[@]}"; do
   name="$(basename "$script")"
-  if [ "${#FAILED[@]}" -eq 0 ] || ! printf '%s\n' "${FAILED[@]}" | grep -qx "$name"; then
+  if [ "${#FAILED[@]}" -eq 0 ] || ! printf '%s\n' ${FAILED[@]+"${FAILED[@]}"} | grep -qx "$name"; then
     PASSED+=("$name")
   fi
 done
 TIMINGS=()
 if [ -s "$TIMING_FILE" ]; then
-  mapfile -t TIMINGS < <(sort -k2 -rn "$TIMING_FILE" | awk '{printf "  %5ss  %s\n", $2, $1}')
+  while IFS= read -r line; do TIMINGS+=("$line"); done < <(sort -k2 -rn "$TIMING_FILE" |
+    awk '{printf "  %5ss  %s\n", $2, $1}')
 fi
 
 printf '\n%s================================================================%s\n' "$C_BOLD" "$C_OFF"
@@ -101,8 +108,8 @@ printf '%sLabs: %d passed, %d failed, %ds elapsed%s\n' \
   "$C_BOLD" "${#PASSED[@]}" "${#FAILED[@]}" "$((SECONDS - START))" "$C_OFF"
 # Per-lab timing, because a total on its own cannot answer "which one was
 # slow", and the answer to that has already turned out to matter.
-printf '%s\n' "${TIMINGS[@]}"
-for name in "${FAILED[@]}"; do
+printf '%s\n' ${TIMINGS[@]+"${TIMINGS[@]}"}
+for name in ${FAILED[@]+"${FAILED[@]}"}; do
   printf '  %sFAIL%s %s\n' "$C_RED" "$C_OFF" "$name"
 done
 

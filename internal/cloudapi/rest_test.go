@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -297,9 +298,11 @@ func TestAChangeGivenUpBeforeItWasSentHasNotTakenEffect(t *testing.T) {
 // TestACallThatGetsNoAnswerEndsWithThePass: the pass deadline reaches the
 // request in flight, and nothing is retried after it.
 func TestACallThatGetsNoAnswerEndsWithThePass(t *testing.T) {
-	var calls int
+	// Atomic: the handler never answers, so nothing orders its write before
+	// the read below.
+	var calls atomic.Int32
 	client, _ := newTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		calls++
+		calls.Add(1)
 		<-r.Context().Done()
 	}))
 
@@ -313,8 +316,8 @@ func TestACallThatGetsNoAnswerEndsWithThePass(t *testing.T) {
 	if took := time.Since(start); took > 5*time.Second {
 		t.Errorf("the call outlived its deadline by %s", took)
 	}
-	if calls != 1 {
-		t.Errorf("sent %d attempt(s), want one: retrying after the deadline cannot succeed", calls)
+	if n := calls.Load(); n != 1 {
+		t.Errorf("sent %d attempt(s), want one: retrying after the deadline cannot succeed", n)
 	}
 }
 

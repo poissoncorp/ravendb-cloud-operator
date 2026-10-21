@@ -58,10 +58,10 @@ if [ -n "$(staged 'api/*')" ]; then
   # Errors are shown, not swallowed. Hiding them made a failed generation look
   # exactly like a clean one: nothing was written, the tree did not change, and
   # the hook waved the commit through. That is the opposite of what it is for.
-  if ! ./hack/go.sh controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...; then
+  if ! ./hack/go.sh go tool controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...; then
     fail "controller-gen failed on the deepcopy pass; the markers in api/ do not compile"
   fi
-  if ! ./hack/go.sh controller-gen crd rbac:roleName=manager-role paths=./...        output:crd:artifacts:config=config/crd/bases        output:rbac:artifacts:config=config/rbac; then
+  if ! ./hack/go.sh go tool controller-gen crd rbac:roleName=manager-role paths=./...        output:crd:artifacts:config=config/crd/bases        output:rbac:artifacts:config=config/rbac; then
     fail "controller-gen failed on the CRD pass; the markers in api/ do not compile"
   fi
   if [ "$before" != "$(git status --porcelain)" ]; then
