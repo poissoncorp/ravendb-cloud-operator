@@ -42,9 +42,9 @@ behaviour changes.
 - That source is private and this repository is public. Record the fact and a
   neutral note of how it was verified ("RavenDB Cloud checks this on create"),
   never its file names, class names, line numbers, branches or commit hashes.
-  The same goes for commit messages, pull requests and CI logs.
-  `hack/cloud-drift` keeps what has to point there in `.cloud-drift.env`
-  (ignored by git) and in repository secrets.
+  The same goes for commit messages, pull requests and CI logs. Whether that
+  source moved is checked outside this repository; `.cloud-drift.env`
+  (ignored by git) holds what that check needs locally.
 - The pacing in `cloudclients` is silent code: the operator paces its calls,
   and nothing here says more about it than that.
 - Never name a RavenDB Cloud environment other than production, and never

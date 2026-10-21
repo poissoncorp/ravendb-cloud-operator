@@ -67,7 +67,8 @@ wrong show up somewhere specific:
   by reading the same document. Only real traffic settles it, which is what `labs/e2e_smoke.sh`
   is for: a read-only pass against a real account, no writes, no cost.
 - **The document itself moved.** `hack/cloud-drift` compares the published OpenAPI document
-  with the vendored [`.reference/swagger.json`](../../.reference/swagger.json) every week, and every
+  with the vendored [`.reference/swagger.json`](../../.reference/swagger.json) every week and opens
+  an issue when it moved, and every
   contract test checks the client's requests and the simulator's answers against that copy.
 - **Behaviour the document never described.** The rules that are not in the spec at all, such as
   Free being portal-only or the subdomain length limit, were found by reading the RavenDB Cloud

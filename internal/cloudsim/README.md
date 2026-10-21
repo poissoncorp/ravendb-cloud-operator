@@ -8,13 +8,12 @@ drift from the first.
 
 ## Staying current
 
-`hack/cloud-drift` checks every week whether RavenDB Cloud moved under this
-simulator: the public OpenAPI document against `.reference/swagger.json`, and
-the RavenDB Cloud source against the commit this simulator was last checked
-against, in the places the operator depends on. That source is private, so the
-commit and the watched paths are repository secrets (and `.cloud-drift.env`
-locally), never written here. When the check reports a change, read it, bring
-the simulator and the operator in line, and move the pinned commit on.
+`hack/cloud-drift` checks every week whether RavenDB Cloud's public OpenAPI
+document moved away from `.reference/swagger.json`, and opens an issue when it
+did. The RavenDB Cloud source is private, so whether it moved in the places the
+operator depends on is checked outside this repository. When either reports a
+change, read it, bring the simulator and the operator in line, and update the
+copy.
 
 Staleness here is not theoretical: an earlier comparison ran against a local
 checkout nearly two hundred commits behind production, which is most of why a
