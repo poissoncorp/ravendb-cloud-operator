@@ -1,5 +1,7 @@
 # Installing
 
+> **See it run:** [labs/00_setup.sh](../../labs/00_setup.sh) installs the operator into a throwaway kind cluster, with a stand-in for RavenDB Cloud, in a couple of minutes.
+
 ## With Helm
 
 ```bash

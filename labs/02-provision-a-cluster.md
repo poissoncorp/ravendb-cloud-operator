@@ -1,5 +1,7 @@
 # Lab 02: provision your first cluster
 
+> **Reference:** [Clusters](../docs/how-to-use/clusters.md) and [status and monitoring](../docs/how-to-use/status-and-monitoring.md) covers the same ground as a guide rather than a walkthrough.
+
 **For:** anyone who has a Ready `CloudAccount` and now wants a RavenDB Cloud cluster that
 Kubernetes owns. You will write the smallest manifest that creates one, read back everything
 the operator decided on your behalf, watch the `STATUS` and `CHANGES` columns on the way from

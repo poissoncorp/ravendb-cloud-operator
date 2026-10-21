@@ -1,5 +1,7 @@
 # Clusters
 
+> **See it run:** [Lab 02](../../labs/02-provision-a-cluster.md) creates one from the smallest manifest, and [lab 05](../../labs/05-day-two-operations.md) changes it once it runs.
+
 One RavenDB Cloud cluster. In RavenDB Cloud's own vocabulary this is a
 "product"; it is called a cluster here because that is what it is, and because
 that is the word the people writing the manifest already have in their heads.

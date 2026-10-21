@@ -1,5 +1,7 @@
 # Lab 06: delete the object without deleting the database
 
+> **Reference:** [Deleting](../docs/how-to-use/deleting.md) covers the same ground as a guide rather than a walkthrough.
+
 **For:** anyone who is going to run `kubectl delete` in a namespace that contains a
 production database, on purpose or by accident. This lab walks the whole deletion path: what
 `Retain` does, what `Terminate` does, when the finalizer appears and what it is holding,

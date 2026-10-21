@@ -1,5 +1,7 @@
 # Status and monitoring
 
+> **See it run:** [Lab 02](../../labs/02-provision-a-cluster.md) walks through STATUS and CHANGES as a cluster comes up, and [lab 05](../../labs/05-day-two-operations.md) through them as it changes.
+
 A CloudCluster answers two questions, one column each. **STATUS** is the reason
 on the `Ready` condition: can I use it? **CHANGES** is the reason on `Synced`:
 did my manifest reach RavenDB Cloud? Both lists are closed, and every message
