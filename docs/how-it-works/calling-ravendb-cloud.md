@@ -17,9 +17,10 @@ wire-to-domain fixup (provider spelling, URL scheme) happens once, in
 
 ## Pacing and deadlines
 
-Every client in the process shares one pace, held by `cloudclients.Cache`, so
-more accounts do not mean more calls per second. A call waits for its turn
-before it is sent.
+The operator paces its calls. Every client in the process shares one pace, held
+by `cloudclients.Cache`, and a call waits for its turn before it is sent. The
+four workers each for CloudClusters and CloudAccounts, and the one for
+restarts, all share it.
 
 - One attempt times out after 30 seconds.
 - One reconcile has a two minute deadline (`passTimeout`); the status write that
@@ -32,20 +33,26 @@ before it is sent.
 | What happened | Class | GET | A change (POST) |
 |---|---|---|---|
 | 429 | retryable | retried | retried |
-| 5xx, connection lost, answer unreadable | retryable, may have applied | retried | **not sent again** |
+| 5xx, connection lost | retryable, may have applied | retried | **not sent again** |
+| a 2xx this client cannot decode | not retryable, may have applied | not retried | **not sent again** |
 | connection never opened | retryable, not sent | retried | retried |
 | given up before sending, the pass out of time | not sent | the next pass | the next pass |
+| 401 or 403 | unauthorized | not retried | not retried |
 | any other 4xx | terminal | not retried | not retried |
 
 RavenDB Cloud takes no idempotency key, so a change that may have happened is
 never sent twice: the next pass reads the cluster and sees (`MayHaveApplied`).
-The controller decides policy from these classes, never from message text:
-`IsNotFound`, `IsAmbiguous`, `IsUnauthorized`, `IsRetryable`, `IsBusy`,
-`IsQuotaReached`, `MayHaveApplied`.
+The controller decides policy from these classes: `IsNotFound`, `IsAmbiguous`,
+`IsUnauthorized`, `IsRetryable`, `IsBusy`, `IsTooSoon`, `IsQuotaReached`,
+`MayHaveApplied`. It never reads a message itself. Busy and too soon are the
+two classes `rest.go` can only tell from the text of RavenDB Cloud's 400; if
+RavenDB Cloud rewords one, it degrades to an ordinary terminal refusal.
 
 A terminal refusal is reported on a condition with a Warning, and nothing
-retries it on a timer; a spec change wakes the object. The product quota is the
-one 4xx that lifts by itself, so it keeps a slow timer.
+retries it on a timer; a spec change wakes the object. Three 4xx lift by
+themselves: busy and too soon are asked again at each poll (see
+[changes-and-drift.md](changes-and-drift.md)), and the product quota (412)
+keeps a ten minute timer. A terminate answered 404 or 410 counts as done.
 
 ## Messages
 

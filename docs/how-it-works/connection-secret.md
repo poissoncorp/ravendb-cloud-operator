@@ -12,9 +12,17 @@ What the operator publishes for applications, and how. Read before changing
 | `studioURL`, `productID` | RavenDB Studio address, RavenDB Cloud cluster id |
 | `tls.crt`, `tls.key`, `client.pem` | client certificate and key, PEM |
 | `client.pfx`, `client.with-password.pfx`, `certificate.password` | PKCS#12 forms |
+| `certificate.bundle` | the archive as RavenDB Cloud sent it, only when it would not unpack |
 
 Renaming a key breaks every pod that names it. RavenDB Cloud serves the
-certificate as a ZIP; the operator unpacks it into these keys.
+certificate as a ZIP; the operator unpacks it into these keys. An archive that
+does not unpack is published raw as `certificate.bundle`, any certificate
+already in place stays, and Ready says `UnexpectedResponse`. With no
+certificate in place, the unpack is tried again on those bytes at every poll,
+without a second download.
+
+The Secret carries the label `cloud.ravendb.net/cluster` with the CloudCluster's
+name, which is why that name is capped at 63 characters, a label value's limit.
 
 ## Two writers, one Secret
 
@@ -33,6 +41,10 @@ old one, which status remembers.
 leaves the Secret object; `includeCertificate: false` removes the certificate
 keys only.
 
+The operator watches the Secret for deletions only, which bring it back at
+once. A hand edit to the endpoint keys is put right at the next poll; the
+certificate keys are written only when a certificate is downloaded.
+
 ## The certificate
 
 Downloaded once, not on every poll, and again when the stored one is within
@@ -41,6 +53,13 @@ for five years and regenerates them 30 days before expiry, so the replacement is
 there when the window opens. `status.certificateExpiresAt` says when the current
 one runs out. Applications usually read the certificate once, so they need a
 restart to use a new one.
+
+A cluster can be Active before its certificate exists: RavenDB Cloud answers 404
+until it does, the endpoints are published anyway, and Ready says
+`WaitingForCertificate`. Any other failed download ends the pass and is reported
+on Ready like any other failed call. A stored certificate that does not parse is
+never downloaded again by itself, since downloading on every poll would turn one
+bad Secret into a loop of calls.
 
 ## No addresses, no Secret
 
