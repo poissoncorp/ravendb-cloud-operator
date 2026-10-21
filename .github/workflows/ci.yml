@@ -6,11 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A second push to the same branch makes the first one's answer irrelevant, and
-# the lab job holds a kind cluster for a few minutes.
+# A second push to a pull request makes the first one's answer irrelevant, and
+# the lab job holds a kind cluster for a few minutes. Not on main: every commit
+# there gets its answer, since a release is cut from one of them.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -72,7 +73,7 @@ jobs:
       # single quotes, word splitting on a list of flags). shellcheck comes
       # with the runner image.
       - name: shellcheck
-        run: shellcheck -S warning $(git ls-files '*.sh') hack/hooks/pre-commit
+        run: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning hack/hooks/pre-commit
 
       - name: no em or en dashes
         run: |
@@ -250,3 +251,51 @@ jobs:
       - name: tear down
         if: always()
         run: labs/00_setup.sh --teardown || true
+
+  # What the Release workflow builds, built on every pull request, so a change
+  # that breaks install.yaml or the chart's Artifact Hub metadata fails here
+  # rather than after a release pull request is merged. Nothing is pushed.
+  release-artifacts:
+    name: release artifacts build and install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Artifact Hub metadata
+        run: docker run --rm -v "$PWD:/repo" -w /repo artifacthub/ah:v1.21.0 ah lint -k helm -p charts
+
+      - name: build install.yaml
+        run: make build-installer RELEASE_IMG=docker.io/ravendb/ravendb-cloud-operator:ci
+
+      - name: building it changed nothing in the tree
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::building the release artifacts changed tracked files"
+            git status --short
+            exit 1
+          fi
+
+      - name: build the image
+        run: docker build --build-arg VERSION=ci -t docker.io/ravendb/ravendb-cloud-operator:ci .
+
+      - name: create a kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          cluster_name: smoke
+          version: v0.27.0
+
+      - name: install.yaml installs and the operator starts
+        run: |
+          kind load docker-image docker.io/ravendb/ravendb-cloud-operator:ci --name smoke
+          kubectl apply -f dist/install.yaml
+          kubectl -n ravendb-cloud-operator-system rollout status             deployment/ravendb-cloud-operator-controller-manager --timeout=3m
+
+      - name: operator logs on failure
+        if: failure()
+        run: |
+          kubectl -n ravendb-cloud-operator-system logs             deployment/ravendb-cloud-operator-controller-manager --tail=100 || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -30 || true
