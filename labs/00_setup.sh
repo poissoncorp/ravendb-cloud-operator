@@ -141,7 +141,7 @@ spec:
     region: eu-central-1
     allowedIPs:
       - $LAB_ALLOWED_IPS
-  refreshInterval: 30m
+  refreshIntervalSeconds: 1800
 YAML
 else
   kubectl apply -f "$REPO_ROOT/labs/manifests/account.yaml" >/dev/null

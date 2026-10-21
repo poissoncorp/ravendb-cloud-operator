@@ -532,9 +532,11 @@ func ValidateCreate(req CreateClusterRequest) error {
 
 func (c *restClient) TerminateCluster(ctx context.Context, id string) error {
 	path := "/api/v1/products/terminate/" + url.PathEscape(id)
-	// hideInPortal false: terminating already stops the bill, and a hidden
-	// record would drop out of the list that dropTerminated relies on seeing.
-	_, err := c.do(ctx, http.MethodPost, path, wireTerminateRequest{HideInPortal: false}, nil)
+	// A terminated product keeps its display name until it is hidden, and
+	// RavenDB Cloud hides it once termination completes when asked here. So a
+	// manifest deleted with Terminate and applied again gets its name back
+	// instead of a refused create.
+	_, err := c.do(ctx, http.MethodPost, path, wireTerminateRequest{HideInPortal: true}, nil)
 	if IsNotFound(err) || statusOf(err) == http.StatusGone {
 		return nil
 	}

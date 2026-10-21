@@ -22,15 +22,15 @@ var (
 		v1alpha1.ProviderGCP:   1000,
 	}
 
-	// The most allow-list entries RavenDB Cloud takes on each provider. AWS is
-	// lower because each address costs two security group rules against a
-	// quota of 60.
 	// Instance types RavenDB Cloud sells without additional nodes, so their
 	// node count cannot change. Verified against RavenDB Cloud's product
 	// validation, which refuses adding a node to all of these and removing one
 	// from the PN types.
 	withoutAdditionalNodes = []string{"PN10", "PN20", "PN30", "PN40", "PN50", "PN60", "PN70", "PS10", "PS20"}
 
+	// The most allow-list entries RavenDB Cloud takes on each provider. AWS is
+	// lower because each address costs two security group rules against a
+	// quota of 60.
 	maxAllowedIPs = map[v1alpha1.Provider]int{
 		v1alpha1.ProviderAWS:   24,
 		v1alpha1.ProviderAzure: 200,
@@ -104,19 +104,4 @@ func validateAllowedIPs(provider v1alpha1.Provider, allowedIPs []string) error {
 		}
 	}
 	return nil
-}
-
-// maxDisplayNameLength is the most characters the RavenDB Cloud portal accepts
-// in a display name. The API does not check it, but a longer name is one the
-// portal could not have made. Checked here rather than in CEL because an omitted spec.displayName
-// falls back to the object's name, which a CEL rule on the spec cannot see.
-const maxDisplayNameLength = 100
-
-func validateDisplayName(name string) error {
-	if len(name) <= maxDisplayNameLength {
-		return nil
-	}
-	return fmt.Errorf(
-		"displayName is %d characters and RavenDB Cloud allows at most %d. spec.displayName cannot be changed or added once the object exists, so delete this one and apply it again with a shorter spec.displayName; nothing was created",
-		len(name), maxDisplayNameLength)
 }

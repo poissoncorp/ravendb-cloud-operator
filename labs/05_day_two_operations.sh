@@ -54,7 +54,7 @@ scales() { [ "$TIER" = Production ]; }
 # intermediate size on both PB10's and PB20's menus, since 20 is the only size
 # they share. DISK4 is on BIG's menu, for the second change.
 # Every poll is a live request on a real environment, so poll gently there.
-POLL=3s; on_cloud && POLL=15s
+POLL=3; on_cloud && POLL=15
 WAIT="$LAB_CHANGE_TIMEOUT"
 
 # --- helpers ---------------------------------------------------------------
@@ -74,7 +74,7 @@ spec:
   # Poll faster than the 5m default so this lab does not sit waiting. Since
   # the operator now honours a shorter pollInterval mid-change too, this also
   # sets how fast each of the seven applies below converges.
-  pollInterval: $POLL
+  pollIntervalSeconds: $POLL
   tier: $TIER
   instanceType: $instance
   nodes: $nodes
@@ -397,7 +397,7 @@ metadata:
 spec:
   accountRef:
     name: ravendb-cloud
-  pollInterval: $POLL
+  pollIntervalSeconds: $POLL
   tier: $TIER
   instanceType: $SMALL
   storage:

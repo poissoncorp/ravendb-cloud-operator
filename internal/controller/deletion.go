@@ -29,13 +29,6 @@ func (r *CloudClusterReconciler) reconcileDelete(
 		case goneFromCloud(cluster):
 			log.FromContext(ctx).Info("the RavenDB Cloud cluster was already deleted outside this operator",
 				"productID", cluster.Status.ProductID)
-		case keepsWhatItTookOver(cluster) && cluster.EffectiveDeletionPolicy() == v1alpha1.DeletionTerminate:
-			emit(r.Recorder, cluster, corev1.EventTypeWarning, v1alpha1.EventRetained,
-				"deletionPolicy is Terminate, but this object took over RavenDB Cloud cluster %s under creationMode "+
-					"TakeOverOrCreate rather than creating it, so it is left running. Terminate it in the RavenDB Cloud "+
-					"portal, or use creationMode TakeOverOnly when Terminate should end a cluster this object takes over.",
-				cluster.Status.ProductID)
-			log.FromContext(ctx).Info("leaving a cluster this object took over running", "productID", cluster.Status.ProductID)
 		case cluster.Status.ProductID != "":
 			emit(r.Recorder, cluster, corev1.EventTypeNormal, v1alpha1.EventRetained,
 				"deletionPolicy is Retain: leaving RavenDB Cloud cluster %s running.", cluster.Status.ProductID)
@@ -164,21 +157,18 @@ func (r *CloudClusterReconciler) deletionStuck(ctx context.Context, cluster *v1a
 
 // nothingToTerminate reports whether deleting this object provably leaves
 // nothing for it to terminate in RavenDB Cloud: Retain, a cluster already
-// deleted there, one this object may not terminate, or an object that holds no
-// productID and never issued a create.
+// deleted there, or an object that holds no productID and never issued a
+// create.
+//
+// Whether this object created its cluster or took it over makes no
+// difference. That is recorded only in status, which a restore from git or a
+// backup does not bring back, and a Terminate that worked only until then
+// would leave the cluster running and billed with nothing left to name it.
 func nothingToTerminate(cluster *v1alpha1.CloudCluster) bool {
-	if cluster.EffectiveDeletionPolicy() == v1alpha1.DeletionRetain || goneFromCloud(cluster) || keepsWhatItTookOver(cluster) {
+	if cluster.EffectiveDeletionPolicy() == v1alpha1.DeletionRetain || goneFromCloud(cluster) {
 		return true
 	}
 	return cluster.Status.ProductID == "" && cluster.Status.ProvisionAttemptedAt == nil
-}
-
-// keepsWhatItTookOver reports whether Terminate must leave the cluster running:
-// this object found it rather than created it, and taking it over was never
-// asked for, because under TakeOverOrCreate a name can match a cluster nobody
-// meant this object to own.
-func keepsWhatItTookOver(cluster *v1alpha1.CloudCluster) bool {
-	return cluster.Status.Adopted && cluster.EffectiveCreationMode() == v1alpha1.CreationTakeOverOrCreate
 }
 
 // goneFromCloud reports whether the cluster was already deleted in RavenDB Cloud
@@ -225,9 +215,9 @@ func (r *CloudClusterReconciler) releaseFinalizer(ctx context.Context, cluster *
 // addFinalizer writes the finalizer and nothing else.
 //
 // A merge patch, not an Update: a spec that has been through Go and back is not
-// the spec the user applied (metav1.Duration re-renders 5m as 5m0s, and an
-// omitempty struct serialises as {}), so an Update bumps generation and the
-// object stops matching anyone's git repository.
+// the spec the user applied (an omitempty struct serialises as {}), so an
+// Update bumps generation and the object stops matching anyone's git
+// repository.
 func (r *CloudClusterReconciler) addFinalizer(ctx context.Context, cluster *v1alpha1.CloudCluster) error {
 	if controllerutil.ContainsFinalizer(cluster, clusterFinalizer) {
 		return nil

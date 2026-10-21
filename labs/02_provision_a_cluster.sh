@@ -231,7 +231,7 @@ spec:
   connectionSecret:
     name: lab02-analytics-connection
     includeCertificate: true
-  pollInterval: 5m
+  pollIntervalSeconds: 300
 YAML
 
 LAB02_MADE="$LAB02_MADE lab02-analytics"
@@ -330,9 +330,8 @@ fi
 # subresource: only a change to spec does.
 #
 # That write used to be an Update, which sends the object back whole, and a spec
-# that has been through Go and back is not the one that was applied. The
-# pollInterval below re-rendered as 5m0s and the two struct fields serialised as
-# {}, so the API server saw a changed spec and bumped generation on every single
+# that has been through Go and back is not the one that was applied: the two
+# struct fields serialised as {}, so the API server saw a changed spec and bumped generation on every single
 # object's first reconcile. Every one was then permanently unequal to the
 # manifest it came from, which is drift a GitOps tool cannot resolve. The
 # finalizer is a merge patch of the difference now.
@@ -342,9 +341,6 @@ check "the finalizer it wrote instead" "cloud.ravendb.net/finalizer" \
   "$(jp cloudcluster lab02-orders '.metadata.finalizers[0]')"
 check "observedGeneration matches what was applied" 1 \
   "$(jp cloudcluster lab02-orders .status.observedGeneration)"
-# The field that used to give it away, still exactly as it was written.
-check "pollInterval is still the string in the manifest" "5m" \
-  "$(jp cloudcluster lab02-orders .spec.pollInterval)"
 
 # status.adopted is a plain bool with omitempty, so a cluster this object
 # created never stores the field at all, and the two printers show that
@@ -423,7 +419,7 @@ spec:
     sizeGB: 20
   managementPolicy: Observe
   # Deliberately short so the settled polling cadence is visible inside a lab.
-  pollInterval: 5s
+  pollIntervalSeconds: 5
 YAML
 wait_for_status lab02-twin ClusterNotFound 60 || { warn "lab02-twin never reported ClusterNotFound"; operator_logs 30; }
 check "lab02-twin STATUS under Observe" ClusterNotFound "$(status_of lab02-twin)"

@@ -48,4 +48,4 @@ spec:
     name: orders-prod-connection
     includeCertificate: true
 
-  pollInterval: 5m
+  pollIntervalSeconds: 300

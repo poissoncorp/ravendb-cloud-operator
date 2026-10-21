@@ -817,10 +817,9 @@ func TestResolveSubdomain(t *testing.T) {
 		{name: "sanitised", displayName: "My_Orders.v2", want: "MyOrdersv2"},
 		{name: "dashes trimmed", displayName: "-orders-", want: "orders"},
 		{
-			// And the advice is to apply again: the field cannot be added to an
-			// object that omitted it, so an edit is refused at admission.
+			// Nothing exists yet, so the field can still be added.
 			name: "too long is refused, not truncated", displayName: "orders-production",
-			wantErr: "delete this one and apply it again",
+			wantErr: "Set spec.subdomain",
 		},
 		{
 			name: "nothing usable left", displayName: "___",
@@ -917,15 +916,13 @@ func TestRejectedCreateStopsRetrying(t *testing.T) {
 	if cond == nil || cond.Reason != v1alpha1.ReasonRefused {
 		t.Fatalf("Ready condition = %+v, want reason Refused", cond)
 	}
-	// The message has to be true about both halves of the policy, because the
-	// old wording was not: it promised "until the spec changes" on a create,
-	// which is exactly where the immutable fields get judged, so the fix it
-	// named was one the API server would refuse.
+	// Both halves of the policy: no timer, and an edit is the way on. Every
+	// field can still change, since nothing was created.
 	if !contains(cond.Message, "not retried on a timer") {
 		t.Errorf("message %q does not say the operator stopped trying", cond.Message)
 	}
-	if !contains(cond.Message, "cannot change once set") {
-		t.Errorf("message %q promises an edit without saying some fields refuse one", cond.Message)
+	if !contains(cond.Message, "every spec field can still be changed") {
+		t.Errorf("message %q does not say the spec can still be edited", cond.Message)
 	}
 
 	// The refusal has to reach kubectl describe, not just the condition, since

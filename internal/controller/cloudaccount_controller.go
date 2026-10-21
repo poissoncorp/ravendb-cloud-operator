@@ -326,11 +326,8 @@ func keyRejectedMessage(account *v1alpha1.CloudAccount, answered string) string 
 }
 
 // markInUse says what is holding a deleted account open, and leaves Ready's
-// status as the last verification left it.
-//
-// A cluster with deletionPolicy Terminate needs the account Ready to
-// terminate. Turning Ready False here deadlocked kubectl delete -f on a file
-// holding both: the account waited for the clusters, and they for the account.
+// status as the last verification left it: being deleted does not change
+// whether the key works.
 func (r *CloudAccountReconciler) markInUse(ctx context.Context, account *v1alpha1.CloudAccount, message string) {
 	if !meta.IsStatusConditionTrue(account.Status.Conditions, v1alpha1.ConditionReady) {
 		message += " The credential is not usable either, so those clusters are waiting on it too."

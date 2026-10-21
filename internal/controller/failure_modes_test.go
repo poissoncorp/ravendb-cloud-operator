@@ -663,17 +663,11 @@ func TestADeletionStuckOnItsAccountLogsOnce(t *testing.T) {
 	h := newHarness(t, credentialSecret(), readyAccount(), cluster)
 	h.reconcileClusterUntilSettled("orders", 6)
 
-	account := h.getAccount(testAccountName)
-	meta.SetStatusCondition(&account.Status.Conditions, metav1.Condition{
-		Type:               v1alpha1.ConditionReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             v1alpha1.ReasonKeyMissing,
-		Message:            "the Secret is gone",
-		ObservedGeneration: account.Generation,
-	})
-	if err := h.k8s.Status().Update(context.Background(), account); err != nil {
-		t.Fatalf("marking the account not Ready: %v", err)
+	// The key is gone and so is the client built from it, as after a restart.
+	if err := h.k8s.Delete(context.Background(), credentialSecret()); err != nil {
+		t.Fatalf("deleting the Secret: %v", err)
 	}
+	h.cluster.Clients.Forget(testNamespace, testAccountName)
 	if err := h.k8s.Delete(context.Background(), h.getCluster("orders")); err != nil {
 		t.Fatalf("deleting: %v", err)
 	}
@@ -747,5 +741,83 @@ func TestTerminateSurvivesTheKeySecretGoingFirst(t *testing.T) {
 	var left v1alpha1.CloudCluster
 	if err := h.k8s.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "orders"}, &left); !apierrors.IsNotFound(err) {
 		t.Errorf("the object is still there (%v); its deletion hangs on a Secret that is gone", err)
+	}
+}
+
+// kubectl delete namespace: the Secret, the account and the cluster all go at
+// once, and the account notices the missing key before the cluster runs. The
+// account then reports KeyMissing, and the cluster waited for it to be Ready
+// again, which in a namespace being deleted it never is.
+func TestTerminateSurvivesTheAccountNoticingTheMissingKeyFirst(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t, credentialSecret(), readyAccount(), provisionCluster("orders", func(c *v1alpha1.CloudCluster) {
+		c.Spec.DeletionPolicy = v1alpha1.DeletionTerminate
+	}))
+	h.reconcileAccount(testAccountName)
+	h.reconcileClusterUntilSettled("orders", 6)
+
+	if err := h.k8s.Delete(ctx, credentialSecret()); err != nil {
+		t.Fatalf("deleting the Secret: %v", err)
+	}
+	h.reconcileAccount(testAccountName)
+	if got := h.getAccount(testAccountName); meta.IsStatusConditionTrue(got.Status.Conditions, v1alpha1.ConditionReady) {
+		t.Fatal("the account is still Ready without its key, so this test is not exercising the teardown order")
+	}
+	h.deleteAccount(testAccountName)
+	if err := h.k8s.Delete(ctx, h.getCluster("orders")); err != nil {
+		t.Fatalf("deleting the cluster: %v", err)
+	}
+	h.reconcileAccount(testAccountName)
+	h.reconcileCluster("orders")
+
+	if n := h.cloud.CallCount("TerminateCluster"); n != 1 {
+		t.Errorf("TerminateCluster called %d times, want once", n)
+	}
+	var left v1alpha1.CloudCluster
+	if err := h.k8s.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "orders"}, &left); !apierrors.IsNotFound(err) {
+		t.Errorf("the object is still there (%v); it waits for an account that is being deleted", err)
+	}
+}
+
+// A key for another account in the account's Secret made every bound cluster
+// read 404 and report DeletedInCloud, and deleting one with Terminate then
+// released it without terminating: a cluster gone from the cloud has nothing
+// to terminate. It was still running, and billed, in its own account.
+func TestAKeyForAnotherAccountLeavesTheClusterAlone(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t, credentialSecret(), readyAccount(), provisionCluster("orders", func(c *v1alpha1.CloudCluster) {
+		c.Spec.DeletionPolicy = v1alpha1.DeletionTerminate
+	}))
+	h.reconcileClusterUntilSettled("orders", 6)
+	if got := h.getCluster("orders").Status.AccountDomain; got != "example.ravendb.cloud" {
+		t.Fatalf("accountDomain = %q, want the account's domain recorded at binding", got)
+	}
+
+	// What the account reports once it has verified a key for another account.
+	account := h.getAccount(testAccountName)
+	account.Status.DomainName = "elsewhere.ravendb.cloud"
+	if err := h.k8s.Status().Update(ctx, account); err != nil {
+		t.Fatalf("updating the account: %v", err)
+	}
+	reads := h.cloud.CallCount("GetCluster")
+	h.reconcileCluster("orders")
+
+	if n := h.cloud.CallCount("GetCluster"); n != reads {
+		t.Errorf("read the cluster %d time(s) with a key for another account", n-reads)
+	}
+	ready := condition(t, h.getCluster("orders"), v1alpha1.ConditionReady)
+	if ready.Reason != v1alpha1.ReasonWaitingForAccount || !strings.Contains(ready.Message, "elsewhere.ravendb.cloud") {
+		t.Errorf("Ready = %s %q, want WaitingForAccount naming the other account", ready.Reason, ready.Message)
+	}
+
+	if err := h.k8s.Delete(ctx, h.getCluster("orders")); err != nil {
+		t.Fatalf("deleting: %v", err)
+	}
+	h.reconcileCluster("orders")
+	if n := h.cloud.CallCount("TerminateCluster"); n != 0 {
+		t.Errorf("sent %d terminate(s) through a key for another account", n)
+	}
+	if got := condition(t, h.getCluster("orders"), v1alpha1.ConditionReady).Reason; got != v1alpha1.ReasonDeleting {
+		t.Errorf("Ready = %q, want Deleting while the keys differ", got)
 	}
 }

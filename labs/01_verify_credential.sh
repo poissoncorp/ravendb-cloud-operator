@@ -108,7 +108,7 @@ spec:
   # Left at the documented default on purpose. Nothing in this lab runs for an
   # hour, so the lists are fetched once and never refreshed again, which is
   # what makes the two status timestamps distinguishable further down.
-  refreshInterval: 1h
+  refreshIntervalSeconds: 3600
 YAML
 
 if ! wait_for cloudaccount lab01-account '.status.conditions[?(@.type=="Ready")].status' True 90; then
