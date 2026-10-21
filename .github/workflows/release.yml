@@ -30,10 +30,8 @@ env:
   RELEASE_REF: ${{ github.event.inputs.tag || github.ref }}
 
   # Every Makefile target shells out to hack/go.sh by default, which runs the
-  # toolchain in a container because Go is not installed on the maintainer's
-  # host. A runner has Go, and the container's tool volume starts empty there,
-  # so without this `make chart-lint` looks for a controller-gen that was
-  # never installed. Same reason ci.yml sets it.
+  # toolchain in a container. A runner has Go, so the container would be pure
+  # overhead. Same reason ci.yml sets it.
   GO_LOCAL: "1"
 
 jobs:
@@ -52,11 +50,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      # chart-lint regenerates from the kubebuilder markers before it compares,
-      # so it needs the generator, not just helm.
-      - name: install controller-gen and setup-envtest
-        run: make tools
 
       # The chart consumes the generated CRDs and RBAC rather than restating
       # them. If that copy is stale the chart would install an operator whose

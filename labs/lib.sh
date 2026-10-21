@@ -669,9 +669,10 @@ require_ready_account() {
 # so a missing CRD or an unreachable cluster is reported rather than mistaken
 # for drift.
 require_current_crds() {
-  local out rc
-  out="$(kubectl diff -f "$REPO_ROOT/config/crd/bases" 2>&1)"
-  rc=$?
+  # "|| rc=$?": under set -e a bare failing assignment ends the script before
+  # rc is read, which hid exactly the messages below.
+  local out rc=0
+  out="$(kubectl diff -f "$REPO_ROOT/config/crd/bases" 2>&1)" || rc=$?
   case "$rc" in
     0) return 0 ;;
     1)

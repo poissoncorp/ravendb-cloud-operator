@@ -8,7 +8,9 @@
 # nothing references a moving tag: an operator pinned to one reinstalls
 # something different on every pod restart.
 IMG ?= ravendb-cloud-operator:dev
-CONTROLLER_TOOLS_VERSION ?= v0.21.0
+# controller-gen and setup-envtest are pinned in go.mod as tools, so they need
+# no install step. golangci-lint is not: its dependencies would land in the
+# operator's module graph.
 GOLANGCI_LINT_VERSION ?= v2.14.0
 ENVTEST_K8S_VERSION ?= 1.37.0
 ifeq ($(GO_LOCAL),1)
@@ -28,19 +30,13 @@ help: ## Show available targets.
 
 ##@ Development
 
-.PHONY: tools
-tools: ## Install controller-gen, setup-envtest and golangci-lint into the toolchain volume.
-	$(GO) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
-	$(GO) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.24
-	$(GO) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-
 .PHONY: generate
 generate: ## Regenerate deepcopy functions.
-	$(GO) controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...
+	$(GO) go tool controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...
 
 .PHONY: manifests
 manifests: ## Regenerate CRDs and RBAC from kubebuilder markers.
-	$(GO) controller-gen crd rbac:roleName=manager-role paths=./... \
+	$(GO) go tool controller-gen crd rbac:roleName=manager-role paths=./... \
 		output:crd:artifacts:config=config/crd/bases \
 		output:rbac:artifacts:config=config/rbac
 
@@ -54,7 +50,7 @@ vet: ## Run go vet.
 
 .PHONY: lint
 lint: ## Run golangci-lint with .golangci.yml.
-	$(GO) golangci-lint run ./...
+	$(GO) go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
 
 .PHONY: hooks
 hooks: ## Install the pre-commit checks.
@@ -78,7 +74,7 @@ build: generate manifests ## Build the manager and the kubectl plugin into bin/.
 #                they need no binary, no cluster and no network.
 #   integration  the envtest kube-apiserver and etcd binaries.
 #   e2e          Docker and a kind cluster, with the operator as a container.
-#   e2e-cloud    a real RavenDB Cloud account and an API key. Costs money.
+#   e2e-cloud    a real RavenDB Cloud account and an API key. Read-only.
 #
 # `make test` stays the one to type: unit plus integration, which is
 # everything reproducible on a laptop without Docker.
@@ -98,13 +94,11 @@ test-unit: generate manifests vet ## Unit: pure Go. Seconds, runs anywhere.
 	@echo "  API server: 'make test-integration' provides one."
 	@echo
 
-.PHONY: envtest-assets
-envtest-assets: ## Download the kube-apiserver and etcd binaries envtest needs.
-	$(GO) setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR) -p path
-
+# setup-envtest downloads the kube-apiserver and etcd binaries on first use and
+# prints where they are, which differs by OS and architecture.
 .PHONY: test-integration
-test-integration: manifests envtest-assets ## CRD: CEL rules against a real kube-apiserver.
-	$(GO) sh -c 'KUBEBUILDER_ASSETS=$(ENVTEST_DIR)/k8s/$(ENVTEST_K8S_VERSION)-linux-amd64 go test ./api/... -count=1 -v'
+test-integration: manifests ## CRD: CEL rules against a real kube-apiserver.
+	$(GO) sh -c 'KUBEBUILDER_ASSETS="$$(go tool setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR) -p path)" go test ./api/... -count=1 -v'
 
 # Kept as an alias because it is in muscle memory and in older notes.
 .PHONY: test-crd
@@ -175,10 +169,6 @@ deploy: manifests ## Deploy the operator into the current cluster, running IMG.
 undeploy: ## Remove the operator from the current cluster.
 	kubectl delete --ignore-not-found -k config/default
 
-.PHONY: run
-run: generate manifests ## Run the operator against the current kubeconfig.
-	$(GO) go run ./cmd
-
 ##@ Labs
 
 .PHONY: lab-setup
@@ -192,7 +182,3 @@ lab-run: ## Run every lab against the current cluster.
 .PHONY: lab-teardown
 lab-teardown: ## Delete the kind cluster the labs use.
 	labs/00_setup.sh --teardown
-
-.PHONY: lab-mock
-lab-mock: ## Run the lab control plane locally on :8080, without Kubernetes.
-	$(GO) go run ./labs/mockcloud
