@@ -23,7 +23,7 @@ SQUATTER="lab03-squatter"
 JOB="lab03-reader"
 BUSYBOX_IMAGE="${LAB03_IMAGE:-busybox:1.36}"
 
-# What the stand-in always produces. A real environment produces its own, so
+# What the simulator always produces. A real environment produces its own, so
 # these are re-derived from the cluster once it is Ready and the checks below
 # assert the relationships rather than the strings.
 NODE_URL="https://a.lab03-app.acme.ravendb.cloud"
@@ -185,7 +185,7 @@ note "starting from a clean namespace"
 
 step "A cluster to connect to"
 # This lab is about the Secret, not about how the cluster got there. Against the
-# stand-in it seeds a three-node cluster called lab03-app and applies a
+# simulator it seeds a three-node cluster called lab03-app and applies a
 # CloudCluster by that name, which takes it over: that keeps the Secret's
 # multi-node shape in view and leaves taking over itself to lab 04. A real
 # account has nothing to seed into and would bill for a Production shape, so
@@ -196,7 +196,7 @@ if on_mock; then
     '{"displayName":"lab03-app","tier":"Production","instanceType":"PB10","region":"eu-central-1"}' |
     sed -n 's/.*"ids":\["\([^"]*\)".*/\1/p')" || SEED_ID=''
   if [ -z "$SEED_ID" ]; then
-    echo "could not seed a cluster in the lab control plane" >&2
+    echo "could not seed a cluster in the simulator" >&2
     exit 1
   fi
   PRODUCT_ID="$SEED_ID"
@@ -296,7 +296,7 @@ check "nodeTags"             "$NODE_TAGS"     "$TAGS_V"
 check "studioURL"            "$STUDIO"        "$STUDIO_V"
 check "productID"            "$PRODUCT_ID"    "$PID_V"
 check_not_empty "certificate.password" "$PW_V"
-on_mock && check "the stand-in's fixed PFX password" "$PFX_PASSWORD" "$PW_V"
+on_mock && check "the simulator's fixed PFX password" "$PFX_PASSWORD" "$PW_V"
 
 # The relationships, which hold on any environment and are what an application
 # actually depends on: url is the first of urls, the tags line up with them one
@@ -387,7 +387,7 @@ if on_cloud; then
   CERT_AT_BEFORE="$(jp cloudcluster "$CLUSTER" .status.certificateRefreshedAt)"
   SYNC_BEFORE="$(jp cloudcluster "$CLUSTER" .status.lastSyncTime)"
   check_not_empty "status.certificateRefreshedAt" "$CERT_AT_BEFORE"
-  info "waiting for the operator to poll at least twice at the 30s pollInterval"
+  info "waiting for the operator to poll at least twice at pollIntervalSeconds 30"
   SYNC_NOW="$SYNC_BEFORE"; SEEN=0
   DEADLINE=$((SECONDS + 180))
   while [ "$SECONDS" -lt "$DEADLINE" ] && [ "$SEEN" -lt 2 ]; do
@@ -409,7 +409,7 @@ DETAILS_BASE="$(details_calls)"
 info "so far for $PRODUCT_ID: $DETAILS_BASE detail polls, $CERTS_AFTER_READY certificate downloads"
 check_calls "certificate downloads to reach Ready" 1 "$CERTS_AFTER_READY"
 
-info "waiting for two more polls at the 5s pollInterval"
+info "waiting for two more polls at pollIntervalSeconds 5"
 DETAILS_NOW="$DETAILS_BASE"
 DEADLINE=$((SECONDS + 120))
 while [ "$SECONDS" -lt "$DEADLINE" ]; do
@@ -446,7 +446,7 @@ info "serial after  $SERIAL_2"
 check_contains "the republished certificate has the same subject" \
   "$CERT_SUBJECT_NEEDLE" "$(cert_field -subject)"
 if on_mock; then
-  # The stand-in mints a fresh certificate on every download, which is how you
+  # The simulator mints a fresh certificate on every download, which is how you
   # can tell the operator went back to the API rather than restoring a cache.
   check "the serial changed, so this was a real download" yes \
     "$([ "$SERIAL_1" != "$SERIAL_2" ] && echo yes || echo no)"
@@ -456,7 +456,7 @@ else
   # would mean the cluster had been reissued underneath us. Measured: the same
   # serial came back from the real service after a real re-download.
   #
-  # Which makes this a place the stand-in is not faithful, and the assertion
+  # Which makes this a place the simulator is not faithful, and the assertion
   # that read as "the operator really called the API" was reading a property of
   # the simulator. What travels is that the material is usable again.
   check "the serial is unchanged, because the cluster keeps its certificate" \
@@ -561,7 +561,7 @@ kubectl -n "$LAB_NAMESPACE" delete job "$JOB" --ignore-not-found >/dev/null 2>&1
 # refused one step earlier, for managing a cluster another object already
 # manages, and never reach the Secret at all: lab 04 shows that refusal.
 
-if needs_mock "a second cluster whose object aims at this Secret (the stand-in can seed one for free)"; then
+if needs_mock "a second cluster whose object aims at this Secret (the simulator can seed one for free)"; then
 step "One Secret, one controller"
 SQUAT_ID="$(lab_api POST /_lab/clusters \
   "{\"displayName\":\"$SQUATTER\",\"tier\":\"Production\",\"instanceType\":\"PB10\",\"region\":\"eu-central-1\"}" |
@@ -624,10 +624,8 @@ check "the new Secret has the same key set" "$EXPECTED_KEYS" "$(secret_key_line 
 check "the new Secret is owned too" "$CLUSTER" "$(jp secret "$SECRET_RENAMED" '.metadata.ownerReferences[0].name')"
 
 # The old Secret is not deleted: it is still owned, so it goes away with the
-# CloudCluster, not with the rename. It is emptied, though, and this check used
-# to stop one line earlier. A rename moved the certificate to the new name and
-# left the old copy of tls.key and certificate.password sitting at an address
-# the spec no longer mentions.
+# CloudCluster, not with the rename. It is emptied, so no copy of tls.key and
+# certificate.password stays at an address the spec no longer mentions.
 info "keys left in $SECRET: [$(secret_key_line "$SECRET")]"
 check "the old Secret is left in place" yes "$(exists secret "$SECRET")"
 check "and it holds nothing"            0   "$(secret_keys "$SECRET" | wc -l | tr -d ' ')"
@@ -642,8 +640,7 @@ check_calls "the rename cost one more certificate download" \
 # In place first, on the Secret that already holds a certificate. This is the
 # case a rename hides: the step below changes the name at the same time, so it
 # lands on a fresh Secret and would pass even if the operator never removed
-# anything. It did not remove anything, once, and the private key stayed
-# published after the user asked for it to stop.
+# anything.
 step "includeCertificate: false on a Secret that already has one"
 CERTS_BEFORE_INPLACE="$(certificate_calls)"
 k patch cloudcluster "$CLUSTER" --type=merge \
@@ -701,11 +698,8 @@ check "the cluster itself is fine"   True            "$(condition cloudcluster "
 check_contains "the message says publishing is off" \
   "spec.connectionSecret.enabled is false, so Secret \"$SECRET_NOCERT\" holds none of this operator's keys" "$DISABLED_MSG"
 
-# This step used to end here, asserting that the Secret survived and noting
-# that publication stops rather than retracts. Measured against the real API,
-# what survived was all eleven keys: tls.key and certificate.password included,
-# in a namespace whose owner had just asked the operator to stop publishing
-# them. The object surviving is right. Its contents surviving was the bug.
+# The object survives and its contents do not: the owner asked for the
+# certificate and the key to stop being published.
 info "keys left in $SECRET_NOCERT: [$(secret_key_line "$SECRET_NOCERT")]"
 check "the Secret object stays"      yes  "$(exists secret "$SECRET_NOCERT")"
 check "and it holds nothing"         0    "$(secret_keys "$SECRET_NOCERT" | wc -l | tr -d ' ')"
@@ -746,12 +740,11 @@ check "the CloudCluster is gone"                 no  "$(exists cloudcluster "$CL
 
 step "Removing the cluster this lab left running"
 # Retain left it running, which is the whole point of Retain, and nothing in
-# Kubernetes will clean it up. The stand-in has a lab surface for that; a real
+# Kubernetes will clean it up. The simulator has a lab surface for that; a real
 # account does not, and the CloudCluster is already gone, so there the cluster
 # is handed back to the operator by taking it over once more, by its name, with
-# deletionPolicy Terminate, and deleting that. creationMode TakeOverOnly is what
-# makes Terminate apply to a cluster this object found, and it never creates
-# one in place of a cluster that is already gone.
+# deletionPolicy Terminate, and deleting that. creationMode TakeOverOnly makes
+# sure it never creates a cluster in place of one that is already gone.
 if on_mock; then
   lab_api POST "/_lab/clusters/${PRODUCT_ID}/vanish" >/dev/null 2>&1 || true
   REMAINING="$(lab_api GET /_lab/clusters | tr ',' '\n' | grep -c "\"id\":\"${PRODUCT_ID}\"" || true)"
