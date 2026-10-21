@@ -24,6 +24,19 @@ CEL transition rules (`oldSelf`) do not fire on create, so a rule that must also
 hold on create needs a second, non-transition rule. A rule with no case in
 `crd_validation_test.go`, against a real API server, is not done.
 
+The identity rules (`accountRef`, `tier`, `provider`, `region`, `subdomain`,
+`displayName`, `creationMode`) sit on `CloudCluster` itself, not on the spec,
+because they hold only once the object has found or created its cluster:
+`status.productID` or `status.provisionAttemptedAt` is set. A rule on the spec
+cannot see status. On an update to the object, the API server keeps the stored
+status, so the rule reads what the operator wrote. Before that, every identity
+field can be edited, since nothing exists in RavenDB Cloud yet.
+
+Durations are whole seconds in an integer field with a minimum
+(`pollIntervalSeconds`, `refreshIntervalSeconds`), not `metav1.Duration`
+strings: a malformed duration string passes admission, then fails to decode,
+and that stops the informer for every object of the kind.
+
 **`cloudapi.ValidateCreate`.** Knows only the request. Defence in depth for a
 caller that did not come through the CRD; it cannot see what RavenDB Cloud
 offers and cannot name a spec field, so it does not grow.
@@ -36,12 +49,21 @@ change and, when the value came from the account, say so. An empty list means
 "this deployment did not tell us", not "nothing is allowed": let RavenDB Cloud
 judge rather than block on missing data.
 
+These checks run when the operator creates a cluster. A later change to a
+running cluster goes to RavenDB Cloud as it is, which judges it, apart from what
+[changes-and-drift.md](changes-and-drift.md) lists as reported instead of sent.
+
+The subdomain derived from the display name is checked here, not in CEL,
+although the rule needs only the object: a take-over never sends a subdomain,
+and CEL cannot tell a manifest that will create from one that finds an existing
+cluster with a long name.
+
 ## Where a default comes from
 
 | Kind | Home |
 |---|---|
 | static | `+kubebuilder:default` in `api/v1alpha1`; if the API server can apply it, nothing else may |
-| dynamic, needing what RavenDB Cloud offers or the account | `internal/controller`: cheapest instance type for a tier, subdomain from the display name, `CloudAccount.spec.defaults` |
+| dynamic, needing what RavenDB Cloud offers or the account | `internal/controller`: smallest instance type for a tier (`smallestForTier`), smallest disk the instance type sells (`smallestDiskFor`), subdomain from the display name, `CloudAccount.spec.defaults`, and for the release channel then the account default RavenDB Cloud reports (`status.defaultReleaseChannel`) |
 | reading a defaulted field | the `Effective*` method on the type, the single read path; where it backstops a static default, a test pins the two to the same value |
 
 Some fields have no default on purpose: `storage.type` depends on the provider,
