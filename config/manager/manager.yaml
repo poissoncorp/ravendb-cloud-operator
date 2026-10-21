@@ -54,13 +54,6 @@ spec:
         args:
         - --leader-elect
         - --health-probe-bind-address=:8081
-        # env:
-        # # Point every CloudAccount at another control plane, for a staging
-        # # cloud or a simulator. An account that sets spec.endpoint still wins
-        # # over this. Uncomment to use; there is no second client
-        # # implementation to swap in, only this redirect.
-        # - name: RAVENDB_CLOUD_ENDPOINT
-        #   value: https://api.staging.example.com
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

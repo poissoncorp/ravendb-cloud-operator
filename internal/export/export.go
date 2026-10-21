@@ -143,7 +143,7 @@ func manifestFor(to Target, cluster *cloudapi.Cluster) manifest {
 		Networking:       v1alpha1.NetworkingSpec{AllowedIPs: cluster.AllowedIPs},
 		ManagementPolicy: v1alpha1.ManagementFull,
 		// The cluster exists, so applying this again must never create one in
-		// its place, and Terminate may end it: taking it over is what was asked.
+		// its place.
 		CreationMode: v1alpha1.CreationTakeOverOnly,
 	}
 	return manifest{

@@ -122,7 +122,7 @@ test-chart-install: ## Install the chart into the lab cluster and check it works
 	labs/chart_install.sh
 
 .PHONY: test-e2e-cloud
-test-e2e-cloud: ## Cloud: against a real RavenDB Cloud account. Needs a key, costs money.
+test-e2e-cloud: ## Cloud: read-only requests against a real RavenDB Cloud account. Needs a key.
 	labs/e2e_smoke.sh
 
 .PHONY: test-all
