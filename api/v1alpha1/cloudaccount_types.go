@@ -66,26 +66,10 @@ type CloudAccountSpec struct {
 	// is written there. The key is never written to status, events or logs.
 	APIKeySecretRef SecretKeySelector `json:"apiKeySecretRef"`
 
-	// A development tool, so it is described here for developers and not in
-	// the field's own description, which kubectl explain shows to everyone.
-	//
-	// It points this account at another control plane: the simulator the labs
-	// run against, for one. There is deliberately no default. An unset field
-	// falls through to the RAVENDB_CLOUD_ENDPOINT environment variable on the
-	// operator, and then to https://api.cloud.ravendb.net, and a kubebuilder
-	// default would defeat that: the API server would fill this in on every
-	// object and the variable would silently do nothing.
-	//
-	// The "@" is excluded so credentials cannot be smuggled in as
-	// https://user:pass@host: the operator logs the endpoint it connected to,
-	// and a password embedded here would be logged with it. Query strings and
-	// fragments are excluded because request paths are appended to it.
-
-	// Endpoint is for development only. Leave it unset.
-	// +kubebuilder:validation:MaxLength=2048
-	// +kubebuilder:validation:Pattern=`^https?://[^@?#]+$`
-	// +optional
-	Endpoint string `json:"endpoint,omitempty"`
+	// There is no per-account endpoint, on purpose. The operator reads the
+	// Secret this names and sends its value to RavenDB Cloud, so an endpoint
+	// anyone who can write a CloudAccount could set would let them send any
+	// Secret in the namespace to a server of their choosing.
 
 	// Defaults are inherited by CloudClusters that reference this account.
 	// +optional

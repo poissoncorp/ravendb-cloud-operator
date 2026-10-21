@@ -96,7 +96,6 @@ func TestTheKeyComesFromTheAccountsSecret(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "ravendb-cloud", Namespace: "apps"},
 			Spec: v1alpha1.CloudAccountSpec{
 				APIKeySecretRef: v1alpha1.SecretKeySelector{Name: "ravendb-cloud-key"},
-				Endpoint:        server.URL,
 			},
 		},
 		&corev1.Secret{
@@ -106,9 +105,18 @@ func TestTheKeyComesFromTheAccountsSecret(t *testing.T) {
 	)
 	inApps := func() (client.Client, string, error) { return kube, "apps", nil }
 
+	// The simulator stands in for RavenDB Cloud the way it does for the
+	// operator: through the endpoint variable, never through the account.
+	toSimulator := func(name string) string {
+		if name == cloudapi.EndpointEnvVar {
+			return server.URL
+		}
+		return ""
+	}
+
 	var out bytes.Buffer
 	args := []string{"export", "--account", "ravendb-cloud", "orders"}
-	if err := run(context.Background(), args, func(string) string { return "" }, &out, inApps); err != nil {
+	if err := run(context.Background(), args, toSimulator, &out, inApps); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	for _, want := range []string{"name: orders", "namespace: apps", "name: ravendb-cloud"} {

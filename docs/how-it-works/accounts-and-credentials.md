@@ -39,6 +39,11 @@ CloudCluster leaves out, at creation.
 when the key changes. All of them share one pace. Deleting an account drops its
 client, so the key stops living in memory.
 
+Every account calls the same control plane, and an account has no field to
+change that. The key is read from whichever Secret the account names and sent
+there, so a destination set on the account would let anyone who can write a
+CloudAccount send any Secret in its namespace to a server of their choosing.
+
 ## Reading an account from a cluster
 
 `usableAccount` is the one way a cluster or restart reads its account: the

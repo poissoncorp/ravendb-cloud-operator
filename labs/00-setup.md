@@ -58,7 +58,6 @@ spec:
   apiKeySecretRef:
     name: ravendb-cloud-api-key
     key: apiKey
-  endpoint: http://mockcloud.ravendb-cloud-lab.svc.cluster.local
   defaults:                      # what a CloudCluster gets when it does not say
     provider: AWS
     region: eu-central-1
@@ -67,9 +66,9 @@ spec:
   refreshIntervalSeconds: 120
 ```
 
-`spec.endpoint` is the one line that makes this the lab: it sends the account's calls to the
-simulator. Against RavenDB Cloud you leave it out and put a real key, created in the portal under
-Account, API Keys, in the Secret. Everything else is what you would write for real.
+This is the account you would write for real. What makes it the lab is outside it: the setup
+pointed the operator itself at the simulator, and the Secret holds a key the simulator accepts.
+Against RavenDB Cloud, the key is one created in the portal under Account, API Keys.
 
 `STATUS Verified` is not a formality. The operator read the key from the Secret, called RavenDB
 Cloud (here, the simulator) with it, and only wrote `Verified` once the call was accepted. The

@@ -286,8 +286,8 @@ func (c *restClient) newRequest(ctx context.Context, method, path string, payloa
 }
 
 // forDisplay makes a response body safe to put in front of a person reading
-// kubectl describe in a terminal. spec.endpoint accepts any http or https URL,
-// so the body is not necessarily from RavenDB Cloud.
+// kubectl describe in a terminal. The body is not necessarily from RavenDB
+// Cloud: a proxy in between answers too.
 //
 // It drops control characters, which a terminal would act on. It replaces
 // invalid UTF-8, and counts runes rather than bytes so its own cut makes none.

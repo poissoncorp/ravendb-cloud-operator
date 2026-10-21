@@ -57,7 +57,7 @@ var rules = []rule{
 		to:   module + "/internal/cloudsim",
 		why: "The simulator is test scaffolding. The controller depends on\n" +
 			"cloudapi.Client, and tests point that client at the simulator over real\n" +
-			"HTTP through spec.endpoint or RAVENDB_CLOUD_ENDPOINT.",
+			"HTTP through the operator-wide endpoint, RAVENDB_CLOUD_ENDPOINT.",
 	},
 	{
 		from: "internal/export",

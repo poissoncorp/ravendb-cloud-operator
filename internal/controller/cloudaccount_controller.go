@@ -266,7 +266,7 @@ func (r *CloudAccountReconciler) clustersUsing(
 // account or control plane than the one this pass verified against.
 //
 // The credential is verified every pass and the catalogue only on its
-// interval, so without this a new endpoint, Secret or key would sit beside the
+// interval, so without this a new Secret or key would sit beside the
 // old account's regions and default channel for up to an hour. A spec edit
 // that moved nothing costs one refresh.
 func catalogueMoved(original, account *v1alpha1.CloudAccount) bool {

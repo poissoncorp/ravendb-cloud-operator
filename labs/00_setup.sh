@@ -62,6 +62,15 @@ kubectl get crd \
   -o custom-columns=NAME:.metadata.name,ESTABLISHED:.status.conditions[?\(@.type==\"Established\"\)].status |
   grep -E 'NAME|cloud.ravendb.net'
 
+if on_cloud; then
+  : "${LAB_CLOUD_ENDPOINT:?set LAB_CLOUD_ENDPOINT to the RavenDB Cloud API to run against}"
+  : "${LAB_CLOUD_API_KEY_FILE:?set LAB_CLOUD_API_KEY_FILE to a file holding the API key}"
+  [ -r "$LAB_CLOUD_API_KEY_FILE" ] || { echo "cannot read $LAB_CLOUD_API_KEY_FILE" >&2; exit 2; }
+  LAB_OPERATOR_ENDPOINT="$LAB_CLOUD_ENDPOINT"
+else
+  LAB_OPERATOR_ENDPOINT="http://mockcloud.${LAB_CLOUD_NAMESPACE}.svc.cluster.local"
+fi
+
 step "Deploying the simulator"
 if on_cloud; then
   note "LAB_TARGET=cloud, so the simulator is deployed but unused: the operator"
@@ -99,6 +108,10 @@ else
   kubectl -n "$LAB_OPERATOR_NAMESPACE" set env deploy/ravendb-cloud-operator-controller-manager \
     RAVENDB_CLOUD_RATE_LIMIT_PER_SECOND="${LAB_RATE_LIMIT:-50}" >/dev/null
 fi
+# Where every account's calls go. The operator-wide setting, never a field on
+# the account: whoever runs the operator decides where API keys are sent.
+kubectl -n "$LAB_OPERATOR_NAMESPACE" set env deploy/ravendb-cloud-operator-controller-manager \
+  RAVENDB_CLOUD_ENDPOINT="$LAB_OPERATOR_ENDPOINT" >/dev/null
 # Force a new pod even when nothing in the Deployment changed.
 #
 # The image tag is fixed and imagePullPolicy is IfNotPresent, so on a re-run
@@ -113,11 +126,8 @@ kubectl -n "$LAB_OPERATOR_NAMESPACE" rollout status deploy/ravendb-cloud-operato
 step "Creating the application namespace and the credential"
 kubectl create namespace "$LAB_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 if on_cloud; then
-  # The same two objects, pointed at a real environment. spec.endpoint is an
-  # ordinary field, so this is the whole difference: no test hook, no build tag.
-  : "${LAB_CLOUD_ENDPOINT:?set LAB_CLOUD_ENDPOINT to the RavenDB Cloud API to run against}"
-  : "${LAB_CLOUD_API_KEY_FILE:?set LAB_CLOUD_API_KEY_FILE to a file holding the API key}"
-  [ -r "$LAB_CLOUD_API_KEY_FILE" ] || { echo "cannot read $LAB_CLOUD_API_KEY_FILE" >&2; exit 2; }
+  # The same two objects with a real key; the operator already points at
+  # LAB_CLOUD_ENDPOINT.
   info "endpoint: $LAB_CLOUD_ENDPOINT"
   info "allowedIPs: $LAB_ALLOWED_IPS"
   # Through stdin, so the key never becomes a file in the repository and never
@@ -135,7 +145,6 @@ spec:
   apiKeySecretRef:
     name: ravendb-cloud-api-key
     key: apiKey
-  endpoint: $LAB_CLOUD_ENDPOINT
   defaults:
     provider: AWS
     region: eu-central-1
@@ -172,10 +181,10 @@ check "status is for the spec that was just applied" \
 if on_cloud; then
   # The Ready message names the account's domain and never the endpoint, so the
   # proof that this is the control plane the run asked for is in two parts: the
-  # spec the operator just observed names it, and the domain it verified is not
-  # the simulator's.
-  check "the account points at the endpoint this run asked for" \
-    "$LAB_CLOUD_ENDPOINT" "$(jp cloudaccount ravendb-cloud .spec.endpoint)"
+  # operator is set to it, and the domain it verified is not the simulator's.
+  check "the operator points at the endpoint this run asked for" "$LAB_CLOUD_ENDPOINT" \
+    "$(kubectl -n "$LAB_OPERATOR_NAMESPACE" get deploy ravendb-cloud-operator-controller-manager \
+       -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RAVENDB_CLOUD_ENDPOINT")].value}')"
   check "and verified an account that is not the simulator's" no \
     "$([ "$(jp cloudaccount ravendb-cloud .status.domainName)" = acme.ravendb.cloud ] && echo yes || echo no)"
   # The simulator reports fixed values; a real account reports its own, and which

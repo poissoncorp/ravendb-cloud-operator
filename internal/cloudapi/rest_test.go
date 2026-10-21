@@ -653,9 +653,8 @@ func TestTheAPIKeyNeverReachesALog(t *testing.T) {
 // way to a Ready condition and a Kubernetes event, which is where somebody
 // reads it out of `kubectl describe` in a terminal.
 //
-// The body is not necessarily from RavenDB Cloud. spec.endpoint accepts any
-// http or https URL, so this is attacker-controllable by anyone who can create
-// a CloudAccount.
+// The body is not necessarily from RavenDB Cloud: a proxy in between answers
+// too, with whatever it likes.
 func TestErrorBodiesAreSafeToPrint(t *testing.T) {
 	cases := []struct {
 		name string

@@ -1,9 +1,8 @@
 # The simulated RavenDB Cloud control plane the labs run against.
 #
 # The operator talks to this exactly as it would talk to api.cloud.ravendb.net;
-# the only difference is the URL in CloudAccount.spec.endpoint. That field is
-# not a lab hack, it is a real part of the API, which is what makes running the
-# whole thing for free possible.
+# the only difference is the operator's RAVENDB_CLOUD_ENDPOINT, which
+# labs/00_setup.sh sets to this service.
 apiVersion: v1
 kind: Namespace
 metadata:

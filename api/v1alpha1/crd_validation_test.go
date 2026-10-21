@@ -519,37 +519,6 @@ func TestCloudAccountCRDInstalls(t *testing.T) {
 // TestCRDDoesNotDefaultTheEndpoint guards the mechanism that replaced having a
 // second implementation of the cloud client.
 //
-// The tests reach the simulator through RAVENDB_CLOUD_ENDPOINT, and that only
-// works while an unset spec.endpoint stays unset. This field carried a kubebuilder default once, which meant the
-// API server wrote the production URL onto every object, the field was never
-// empty, and the environment variable did nothing whatsoever. Nothing failed:
-// the Go tests build their objects in memory and never see CRD defaulting, so
-// only a real API server can answer this question. That is why the assertion
-// lives here rather than beside cloudclients.Cache.Endpoint.
-func TestCRDDoesNotDefaultTheEndpoint(t *testing.T) {
-	requireEnvtest(t)
-	ns := newNamespace(t)
-
-	account := &v1alpha1.CloudAccount{
-		ObjectMeta: metav1.ObjectMeta{Name: "no-endpoint", Namespace: ns},
-		Spec: v1alpha1.CloudAccountSpec{
-			APIKeySecretRef: v1alpha1.SecretKeySelector{Name: "api-key"},
-		},
-	}
-	if err := k8sClient.Create(context.Background(), account); err != nil {
-		t.Fatalf("creating a CloudAccount with no endpoint: %v", err)
-	}
-
-	var stored v1alpha1.CloudAccount
-	key := client.ObjectKeyFromObject(account)
-	if err := k8sClient.Get(context.Background(), key, &stored); err != nil {
-		t.Fatalf("reading it back: %v", err)
-	}
-	if stored.Spec.Endpoint != "" {
-		t.Errorf("spec.endpoint came back as %q; a default here makes RAVENDB_CLOUD_ENDPOINT dead code",
-			stored.Spec.Endpoint)
-	}
-}
 
 // TestCRDDefaultsAgreeWithAccessors pins every +kubebuilder:default against the
 // Go accessor that reads the same field.
@@ -1055,49 +1024,6 @@ func TestCRDAcceptsTheSmallestUsefulManifest(t *testing.T) {
 // scheme-less endpoint is stored happily and surfaces on the first reconcile as
 // a condition, which is a slower and vaguer way to learn about a typo.
 //
-// The "@" check is a security rule. The operator logs the endpoint it connected
-// to, so https://user:pass@host would put a password in the operator's log for
-// anyone with pod log access. The API key belongs in the Secret.
-func TestCRDConstrainsTheEndpoint(t *testing.T) {
-	requireEnvtest(t)
-	ctx := context.Background()
-
-	cases := []struct {
-		name     string
-		endpoint string
-		accepted bool
-	}{
-		{"https is the normal case", "https://api.cloud.ravendb.net", true},
-		{"http for a simulator in-cluster", "http://mockcloud.ravendb-cloud-lab.svc.cluster.local", true},
-		{"a port is fine", "http://localhost:8080", true},
-		{"so is a subpath, for a reverse proxy", "https://gateway.internal/ravendb-cloud", true},
-		{"no scheme", "api.cloud.ravendb.net", false},
-		{"the wrong scheme", "ftp://api.cloud.ravendb.net", false},
-		{"credentials in the URL", "https://user:hunter2@api.cloud.ravendb.net", false},
-		{"a bare userinfo", "https://token@api.cloud.ravendb.net", false},
-		{"a query string, which request paths would drop", "https://api.cloud.ravendb.net?k=v", false},
-		{"a fragment, likewise", "https://api.cloud.ravendb.net#frag", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			account := &v1alpha1.CloudAccount{
-				ObjectMeta: metav1.ObjectMeta{Name: "endpoint", Namespace: newNamespace(t)},
-				Spec: v1alpha1.CloudAccountSpec{
-					APIKeySecretRef: v1alpha1.SecretKeySelector{Name: "api-key"},
-					Endpoint:        tc.endpoint,
-				},
-			}
-			err := k8sClient.Create(ctx, account)
-			if tc.accepted && err != nil {
-				t.Fatalf("endpoint %q should be accepted: %v", tc.endpoint, err)
-			}
-			if !tc.accepted && err == nil {
-				t.Fatalf("endpoint %q should be refused", tc.endpoint)
-			}
-		})
-	}
-}
 
 // TestCRDRefusesDuplicateAllowedIPsOnBothLists pins the +listType=set markers.
 //
