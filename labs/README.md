@@ -43,6 +43,9 @@ Finished? `labs/00_setup.sh --teardown`.
 | [06](06-delete-safely.md) | Delete the object without deleting the database, and a cluster deleted behind the operator's back | you are about to run `kubectl delete` on something that costs money | write |
 | [07](07_delete_a_credential_in_use.sh) | Deleting a `CloudAccount` that a `CloudCluster` still names | you share one credential between clusters | none |
 
+The labs walk through a topic once; [docs/how-to-use](../docs/how-to-use/) is the reference for
+the same ground, one guide per topic, each pointing back at its lab.
+
 **In a hurry?** 00, then 03. That is the shortest path to seeing the thing the
 operator exists to produce, a Secret a pod can mount, and it takes about a
 minute. 01 through 06 in order is the full lifecycle. 07 is a single failure

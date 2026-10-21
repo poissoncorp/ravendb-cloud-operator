@@ -53,3 +53,4 @@ place.
 
 Labs run against the simulator by default and against a real account with
 `LAB_TARGET=cloud`, one at a time, each cleaning up what it created.
+[labs/README.md](../../labs/README.md) lists them and what each has passed where.

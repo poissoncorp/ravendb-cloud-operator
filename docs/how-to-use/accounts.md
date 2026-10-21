@@ -1,5 +1,7 @@
 # Accounts
 
+> **See it run:** [Lab 01](../../labs/01-verify-credential.md) verifies a key and rotates it, and [lab 07](../../labs/07_delete_a_credential_in_use.sh) deletes an account a cluster still names.
+
 The credential, plus the defaults its clusters inherit when the operator
 creates them. It also mirrors the region and release channel lists into status,
 so `kubectl describe cloudaccount` answers "what can I actually ask for here"

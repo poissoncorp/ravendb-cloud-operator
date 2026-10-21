@@ -1,5 +1,7 @@
 # Taking over clusters that already exist
 
+> **See it run:** [Lab 04](../../labs/04-take-over-an-existing-cluster.md) takes a cluster over by name, exports it, and shows the ways binding refuses.
+
 Because a CloudCluster takes over the cluster its name finds, bringing an
 existing estate under the operator is one manifest per cluster. Write those
 from the clusters rather than by hand:

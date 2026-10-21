@@ -1,5 +1,7 @@
 # Lab 03: Connect an application to the cluster
 
+> **Reference:** [Connecting an application](../docs/how-to-use/connecting-applications.md) covers the same ground as a guide rather than a walkthrough.
+
 **For:** you have a Ready `CloudCluster` and now need a pod in the same namespace to actually
 talk to it. This lab walks the connection Secret the operator publishes: all eleven keys and
 what each one is for, proof that the certificate inside is a real certificate, a pod that

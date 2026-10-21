@@ -1,5 +1,7 @@
 # Moving to a new API version
 
+> **See it run:** [Lab 04](../../labs/04-take-over-an-existing-cluster.md) runs the export this relies on.
+
 `v1alpha1` can still change in ways old manifests do not survive, and when it
 does there will be no conversion webhook. None is needed: a CloudCluster finds
 its cluster by name, so moving to a new version is deleting the old objects and

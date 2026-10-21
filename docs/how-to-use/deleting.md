@@ -1,5 +1,7 @@
 # Deleting
 
+> **See it run:** [Lab 06](../../labs/06-delete-safely.md) deletes with each policy, with a broken credential, and with the finalizer forced off.
+
 `kubectl delete cloudcluster` deletes a Kubernetes object. Whether it also
 deletes a database is decided by `spec.deletionPolicy`.
 
