@@ -2,7 +2,7 @@
 # Nothing here configures RavenDB Cloud itself: that is what a CloudAccount is.
 
 image:
-  repository: ghcr.io/ravendb/ravendb-cloud-operator
+  repository: docker.io/ravendb/ravendb-cloud-operator
   # Empty means the chart's appVersion, which is the operator release the chart
   # was published for. Set this only to pin something else on purpose.
   #
@@ -14,7 +14,7 @@ image:
 
 # Secrets in the release namespace that can pull the image above. Required for
 # a private registry or an air-gapped mirror, which is the only way to install
-# this where ghcr.io is not reachable.
+# this where Docker Hub is not reachable.
 #
 #   imagePullSecrets: [{name: my-registry-creds}]
 imagePullSecrets: []

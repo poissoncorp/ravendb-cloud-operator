@@ -3,11 +3,18 @@
 # Every Go target runs inside a container via hack/go.sh, so a working Docker is
 # the only prerequisite. Set GO_LOCAL=1 to use a host Go toolchain instead.
 
+# The version of the last release, or of the one being prepared: the Prepare
+# Release workflow sets it, the Release workflow reads it, and it is stamped
+# into both binaries.
+VERSION ?= 0.0.0-dev
+
 # A local build, because docker-build and deploy are the development path. The
 # published image is pinned by the Helm chart to the release it ships with, and
 # nothing references a moving tag: an operator pinned to one reinstalls
 # something different on every pod restart.
 IMG ?= ravendb-cloud-operator:dev
+RELEASE_IMG ?= docker.io/ravendb/ravendb-cloud-operator:$(VERSION)
+LDFLAGS := -s -w -X github.com/ravendb/ravendb-cloud-operator/internal/version.Version=$(VERSION)
 # controller-gen and setup-envtest are pinned in go.mod as tools, so they need
 # no install step. golangci-lint is not: its dependencies would land in the
 # operator's module graph.
@@ -61,8 +68,8 @@ hooks: ## Install the pre-commit checks.
 
 .PHONY: build
 build: generate manifests ## Build the manager and the kubectl plugin into bin/.
-	$(GO) go build -o bin/manager ./cmd
-	$(GO) go build -o bin/kubectl-ravendb_cloud ./cmd/kubectl-ravendb_cloud
+	$(GO) go build -ldflags "$(LDFLAGS)" -o bin/manager ./cmd
+	$(GO) go build -ldflags "$(LDFLAGS)" -o bin/kubectl-ravendb_cloud ./cmd/kubectl-ravendb_cloud
 
 ##@ Test
 
@@ -149,7 +156,17 @@ chart-lint: chart-verify ## Lint the chart and render every values file in ci/.
 
 .PHONY: docker-build
 docker-build: ## Build the operator image.
-	docker build -t $(IMG) .
+	docker build --build-arg VERSION=$(VERSION) -t $(IMG) .
+
+# A kustomization written next to the output, rather than kustomize edit on
+# config/manager, so building the installer never leaves the tree dirty.
+.PHONY: build-installer
+build-installer: manifests ## Write dist/install.yaml: CRDs, RBAC and the manager running RELEASE_IMG.
+	mkdir -p dist
+	printf 'resources:\n- ../config/default\nimages:\n- name: ravendb-cloud-operator\n  newName: %s\n  newTag: %s\n' \
+		"$(firstword $(subst :, ,$(RELEASE_IMG)))" "$(lastword $(subst :, ,$(RELEASE_IMG)))" > dist/kustomization.yaml
+	kubectl kustomize dist > dist/install.yaml
+	rm dist/kustomization.yaml
 
 .PHONY: install
 install: manifests ## Install the CRDs into the current cluster.
