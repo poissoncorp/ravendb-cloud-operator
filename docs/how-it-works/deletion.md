@@ -44,7 +44,10 @@ leave it in `Deleting`, with the advice to hide the one that is not this
 object's.
 
 A terminate that fails keeps the object in `Deleting`, with a Warning saying
-why, until it goes through.
+why, until it goes through. A failure another attempt could fix is retried
+with backoff. A rejected key is tried again every poll, because a new key in
+the Secret wakes the account and not the cluster. Any other refusal waits for
+the object to change, as every terminal refusal does.
 
 ## When the account cannot be used
 

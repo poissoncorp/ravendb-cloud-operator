@@ -131,18 +131,28 @@ func (r *CloudClusterReconciler) deleteWithoutAccount(
 }
 
 // terminateFailed keeps the object, and its finalizer, until the terminate goes
-// through.
+// through. A rejected key is tried again on a timer, because a new key in the
+// Secret wakes the account and not this object. Any other refusal RavenDB
+// Cloud would repeat, so it waits for the object to change.
 func (r *CloudClusterReconciler) terminateFailed(
 	ctx context.Context, original, cluster *v1alpha1.CloudCluster, doing string, err error,
 ) (ctrl.Result, error) {
 	message := sentence(fmt.Sprintf("Could not %s: %s", doing, cloudSaid(err))) +
 		" The object stays until this succeeds."
-	if cloudapi.IsRetryable(err) {
+	switch {
+	case cloudapi.IsRetryable(err):
 		r.deletionStuck(ctx, cluster, message+" Retrying.")
 		return r.finish(ctx, original, cluster, ctrl.Result{}, err)
+	case cloudapi.IsUnauthorized(err):
+		poll := cluster.EffectivePollInterval()
+		r.deletionStuck(ctx, cluster, fmt.Sprintf(
+			"%s Put a key RavenDB Cloud accepts in the Secret CloudAccount %q names; this tries again every %s.",
+			message, cluster.Spec.AccountRef.Name, poll))
+		return r.finish(ctx, original, cluster, ctrl.Result{RequeueAfter: poll}, nil)
 	}
-	r.deletionStuck(ctx, cluster, message)
-	return r.finish(ctx, original, cluster, ctrl.Result{RequeueAfter: cluster.EffectivePollInterval()}, nil)
+	r.deletionStuck(ctx, cluster, message+" This is not retried on a timer; the operator tries again when the "+
+		"object changes. Set spec.deletionPolicy to Retain to let it go and leave the cluster running.")
+	return r.finish(ctx, original, cluster, ctrl.Result{}, nil)
 }
 
 // deletionStuck says what a deletion is waiting for, and warns once per thing

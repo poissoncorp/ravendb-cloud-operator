@@ -52,7 +52,9 @@ A terminal refusal is reported on a condition with a Warning, and nothing
 retries it on a timer; a spec change wakes the object. Three 4xx lift by
 themselves: busy and too soon are asked again at each poll (see
 [changes-and-drift.md](changes-and-drift.md)), and the product quota (412)
-keeps a ten minute timer. A terminate answered 404 or 410 counts as done.
+keeps a ten minute timer. A terminate answered 404 or 410 counts as done,
+and one refused for the key is tried again every poll, since a new key wakes
+only the account.
 
 ## Messages
 
