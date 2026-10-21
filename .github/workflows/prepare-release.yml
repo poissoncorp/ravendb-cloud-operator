@@ -1,0 +1,112 @@
+name: Prepare Release
+
+# The first half of releasing. Run it from the Actions tab with the version to
+# release. It writes that version everywhere it lives, packages the chart into
+# helm/, which GitHub Pages serves as the Helm repository, and opens a pull
+# request labelled release:auto. Merging that pull request with the label still
+# on runs the Release workflow; take the label off to merge without publishing.
+#
+# Secrets:
+#   RAVENDB_BOT_PAT  opens the pull request. One opened with the workflow's
+#                    own token starts no workflows, so CI would not run on it.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v: 1.2.0, or 1.2.0-rc.1"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # The Makefile runs Go through a container by default; a runner has Go.
+  GO_LOCAL: "1"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: the version is well formed and new
+        run: |
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::'$VERSION' is not a version like 1.2.0 or 1.2.0-rc.1"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "::error::v${VERSION} is already tagged"
+            exit 1
+          fi
+
+      # The places the version is written. The chart's image annotation is what
+      # Artifact Hub scans, and the plugin manifest is what Claude Code installs
+      # the skill as.
+      - name: write the version
+        run: |
+          sed -i "s/^VERSION ?=.*/VERSION ?= ${VERSION}/" Makefile
+          chart=charts/ravendb-cloud-operator/Chart.yaml
+          sed -i "s/^version:.*/version: ${VERSION}/" "$chart"
+          sed -i "s/^appVersion:.*/appVersion: ${VERSION}/" "$chart"
+          sed -i -E "s|(image: docker.io/ravendb/ravendb-cloud-operator):[^[:space:]]*|\1:${VERSION}|" "$chart"
+          sed -i -E "s|(\"version\": )\"[^\"]*\"|\1\"${VERSION}\"|" .claude-plugin/plugin.json
+          git diff --stat
+
+      - name: regenerate, and check the chart
+        run: make generate manifests chart-lint
+
+      - name: package the chart into the Helm repository
+        run: |
+          helm package charts/ravendb-cloud-operator --destination helm/
+          merge=()
+          [ -f helm/index.yaml ] && merge=(--merge helm/index.yaml)
+          helm repo index helm/ --url https://ravendb.github.io/ravendb-cloud-operator/helm "${merge[@]}"
+
+      - name: the release:auto label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create release:auto --color 0e8a16 \
+            --description "Merging publishes the release. Remove it to merge without publishing." || true
+
+      - name: open the release pull request
+        id: pr
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.RAVENDB_BOT_PAT }}
+          branch: release/v${{ env.VERSION }}
+          base: main
+          title: "release: v${{ env.VERSION }}"
+          commit-message: "release: v${{ env.VERSION }}"
+          labels: release:auto
+          body: |
+            Sets the version to ${{ env.VERSION }} and adds the packaged chart to the Helm repository.
+
+            Merging with the **release:auto** label still on publishes it: tests, a smoke install
+            on kind and an arm64 start, then the image on Docker Hub, the tag, and a GitHub Release
+            with `install.yaml` and the kubectl plugin. Remove the label to merge without publishing.
+
+      - name: summary
+        env:
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          {
+            echo "## Prepare Release v${VERSION}"
+            echo
+            echo "Release pull request: ${PR_URL:-not opened}"
+          } >> "$GITHUB_STEP_SUMMARY"

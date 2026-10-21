@@ -95,8 +95,9 @@ Against a real account, install a released operator with its Helm chart, which
 pins the image of that release:
 
 ```bash
-helm install ravendb-cloud-operator oci://ghcr.io/ravendb/charts/ravendb-cloud-operator \
-  --version 0.1.0 --namespace ravendb-cloud-operator-system --create-namespace
+helm repo add ravendb-cloud-operator https://ravendb.github.io/ravendb-cloud-operator/helm
+helm install ravendb-cloud-operator ravendb-cloud-operator/ravendb-cloud-operator \
+  --version <version> --namespace ravendb-cloud-operator-system --create-namespace
 kubectl create namespace apps
 kubectl apply -f examples/00-account.yaml    # edit the API key first
 kubectl apply -f examples/01-provision-minimal.yaml

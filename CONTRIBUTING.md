@@ -101,6 +101,32 @@ on how RavenDB Cloud behaves, say in the pull request what the document says
 and what you saw the service answer; a maintainer confirms it against RavenDB
 Cloud itself before it is merged.
 
+## Releasing
+
+Two workflows, as in [ravendb-operator](https://github.com/ravendb/ravendb-operator):
+
+1. **Prepare Release**, run from the Actions tab with the version (`1.2.0`, or
+   `1.2.0-rc.1` for a release candidate). It writes the version into the
+   Makefile, the chart and the skill's plugin manifest, packages the chart into
+   `helm/`, and opens a pull request labelled `release:auto`.
+2. Merging that pull request runs **Release**: the tests, `install.yaml` on a
+   kind cluster, the arm64 image under QEMU, and only then the image on Docker
+   Hub, the tag, and a GitHub Release with `install.yaml` and the kubectl
+   plugin. Remove the label to merge without publishing. A release candidate
+   does not move `latest`.
+
+Set up once, by a repository admin:
+
+- secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a token that can push
+  `ravendb/ravendb-cloud-operator`), and `RAVENDB_BOT_PAT`, which opens the
+  release pull request so CI runs on it;
+- GitHub Pages serving the `main` branch, which publishes `helm/` as the Helm
+  repository `https://ravendb.github.io/ravendb-cloud-operator/helm`;
+- that Helm repository registered in Artifact Hub, which reads
+  `helm/artifacthub-repo.yml`;
+- branch protection on `main` requiring CI, so a release pull request cannot
+  merge red.
+
 ## Style
 
 - No em dashes or en dashes, anywhere.
