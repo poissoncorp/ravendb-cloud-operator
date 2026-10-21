@@ -1,0 +1,5 @@
+{
+  "name": "ravendb-cloud-operator",
+  "description": "A skill for writing and troubleshooting RavenDB Cloud operator manifests.",
+  "license": "MIT"
+}

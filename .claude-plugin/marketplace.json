@@ -1,0 +1,11 @@
+{
+  "name": "ravendb-cloud-operator",
+  "owner": { "name": "RavenDB" },
+  "plugins": [
+    {
+      "name": "ravendb-cloud-operator",
+      "source": ".",
+      "description": "A skill for writing and troubleshooting RavenDB Cloud operator manifests."
+    }
+  ]
+}

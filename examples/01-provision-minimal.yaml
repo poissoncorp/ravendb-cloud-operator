@@ -17,11 +17,11 @@
 # rather than leaving you to guess. A field left out of the manifest stays
 # unmanaged afterwards: the operator changes only what the manifest says.
 #
-# Two of them are permanent. displayName and subdomain cannot be edited once
-# the object exists, not even to add one that was left out. If the derived
-# subdomain is already taken, delete this object and apply it again with
-# spec.subdomain set; nothing is created until the name is accepted, so nothing
-# is lost. In a shared account, naming it up front is the safer habit.
+# Until the cluster exists, every field can be edited: if the derived
+# subdomain is too long (RavenDB Cloud allows 13 characters) or already taken,
+# the object says so and setting spec.subdomain fixes it. Once the cluster
+# exists, displayName and subdomain are fixed for good, as are tier, provider
+# and region.
 apiVersion: cloud.ravendb.net/v1alpha1
 kind: CloudCluster
 metadata:
