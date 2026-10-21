@@ -23,7 +23,7 @@ The labs and `make test-e2e` also need `kubectl` and
 | `make test-integration` | CEL rules and defaults against a real API server (envtest) | seconds |
 | `make test-e2e` | the operator as a container in a kind cluster, through the labs | minutes |
 | `make test-chart-install` | the Helm chart installed into that cluster, scoped to one namespace | minutes |
-| `make test-e2e-cloud` | against a real RavenDB Cloud account; needs a key and costs money | minutes |
+| `make test-e2e-cloud` | read-only requests against a real RavenDB Cloud account; needs a key | a minute |
 | `make lint` | golangci-lint, as CI runs it | seconds |
 | `make generate manifests` | deepcopy, CRDs and RBAC from the markers; run after touching `api/v1alpha1/` | seconds |
 | `make chart-sync`, `make chart-lint` | copy the generated CRDs and RBAC into the chart; check it matches, lints and renders | seconds |
