@@ -1,6 +1,6 @@
-# Toolchain binaries fetched or built by the Makefile, and a kind binary the
-# labs pick up when kind is not on the PATH. All reproducible:
-# `make envtest-assets` refetches the envtest apiserver and etcd.
+# Build output, the envtest apiserver and etcd, a kind binary the labs pick up
+# when kind is not on the PATH, and on Linux the Go caches of hack/go.sh. All
+# reproducible: `make test-integration` refetches the envtest binaries.
 bin/
 
 # Go build and test output

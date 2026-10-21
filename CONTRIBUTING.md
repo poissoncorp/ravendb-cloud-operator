@@ -9,7 +9,8 @@ read the file for the part you are changing.
 
 Docker. Every Go target in the Makefile runs inside a container through
 `hack/go.sh`, so no Go toolchain is needed. With Go 1.26 installed, set
-`GO_LOCAL=1` to use it instead.
+`GO_LOCAL=1` to use it instead. controller-gen and setup-envtest are pinned in
+`go.mod` and run with `go tool`, so there is nothing else to install.
 
 The labs and `make test-e2e` also need `kubectl` and
 [kind](https://kind.sigs.k8s.io/).
@@ -36,6 +37,10 @@ actually exercise the CRDs.
 
 CI runs the tests, the linter, the chart checks, a vulnerability scan and the
 labs on every pull request.
+
+A build through `hack/go.sh` that fails with an error that makes no sense, such
+as `dwarf: definition of unknown kind`, usually means its Go build cache volume
+is damaged. `./hack/go.sh go clean -cache` empties it.
 
 ## Adding a spec field
 

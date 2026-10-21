@@ -68,6 +68,12 @@ jobs:
           done
           exit $rc
 
+      # Warnings only: the notes below that level are deliberate (jsonpath in
+      # single quotes, word splitting on a list of flags). shellcheck comes
+      # with the runner image.
+      - name: shellcheck
+        run: shellcheck -S warning $(git ls-files '*.sh') hack/hooks/pre-commit
+
       - name: no em or en dashes
         run: |
           # UTF-8 bytes, not the characters, so this step passes its own check
@@ -90,9 +96,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: install controller-gen and setup-envtest
-        run: make tools
 
       - name: regenerate
         run: make generate manifests
@@ -156,9 +159,6 @@ jobs:
           cache: true
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
 
-      - name: install controller-gen and setup-envtest
-        run: make tools
-
       - name: chart is in sync, lints and renders
         run: make chart-lint
 
@@ -171,9 +171,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: install controller-gen and setup-envtest
-        run: make tools
 
       # Under -race, because reconciles run concurrently and share clients.
       - name: go test
@@ -188,9 +185,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: install controller-gen and setup-envtest
-        run: make tools
 
       # The apiserver and etcd binaries are 175MB and pinned to
       # ENVTEST_K8S_VERSION, so there is no reason to fetch them every run.
@@ -226,6 +220,7 @@ jobs:
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           install_only: true
+          version: v0.27.0
 
       # For the chart install check at the end of this job.
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
