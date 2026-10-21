@@ -103,9 +103,9 @@ func (in *CloudAccountSpec) DeepCopyInto(out *CloudAccountSpec) {
 		*out = new(AccountDefaults)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.RefreshInterval != nil {
-		in, out := &in.RefreshInterval, &out.RefreshInterval
-		*out = new(v1.Duration)
+	if in.RefreshIntervalSeconds != nil {
+		in, out := &in.RefreshIntervalSeconds, &out.RefreshIntervalSeconds
+		*out = new(int32)
 		**out = **in
 	}
 }
@@ -342,9 +342,9 @@ func (in *CloudClusterSpec) DeepCopyInto(out *CloudClusterSpec) {
 		*out = new(ConnectionSecretSpec)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.PollInterval != nil {
-		in, out := &in.PollInterval, &out.PollInterval
-		*out = new(v1.Duration)
+	if in.PollIntervalSeconds != nil {
+		in, out := &in.PollIntervalSeconds, &out.PollIntervalSeconds
+		*out = new(int32)
 		**out = **in
 	}
 }

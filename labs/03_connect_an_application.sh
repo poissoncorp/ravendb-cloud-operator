@@ -211,7 +211,7 @@ spec:
     name: ravendb-cloud
   tier: Production
   # Faster than the 5m default, so this lab can watch several polls go by.
-  pollInterval: 5s
+  pollIntervalSeconds: 5
 YAML
 else
   info "provisioning a Development cluster; this takes minutes, not seconds"
@@ -223,7 +223,7 @@ metadata:
 spec:
   accountRef:
     name: ravendb-cloud
-  pollInterval: 30s
+  pollIntervalSeconds: 30
   tier: Development
   storage:
     sizeGB: 20

@@ -288,7 +288,8 @@ func readyAccount() *v1alpha1.CloudAccount {
 			},
 		},
 		Status: v1alpha1.CloudAccountStatus{
-			DomainName:            "acme.ravendb.cloud",
+			// What the simulator answers, as a verified account would have it.
+			DomainName:            "example.ravendb.cloud",
 			DefaultReleaseChannel: "Stable72",
 			Providers: []v1alpha1.ProviderRegions{
 				{Provider: v1alpha1.ProviderAWS, Regions: []string{"eu-central-1", "us-east-1"}},

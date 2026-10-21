@@ -57,26 +57,38 @@ func deleteTakenOver(t *testing.T, mode v1alpha1.CreationMode) (*harness, *cloud
 	return h, seeded
 }
 
-func TestTerminateLeavesAClusterTakenOverByDefaultRunning(t *testing.T) {
-	h, _ := deleteTakenOver(t, v1alpha1.CreationTakeOverOrCreate)
+// Terminate ends the cluster an object holds however it came to hold it. It
+// used to leave one found under TakeOverOrCreate running, and since only
+// status says how a cluster was found, a cluster this object created and then
+// found again after a restore from git was left running and billed.
+func TestTerminateEndsAClusterTakenOverInEitherMode(t *testing.T) {
+	for _, mode := range []v1alpha1.CreationMode{v1alpha1.CreationTakeOverOrCreate, v1alpha1.CreationTakeOverOnly} {
+		t.Run(string(mode), func(t *testing.T) {
+			h, seeded := deleteTakenOver(t, mode)
 
-	if n := h.cloud.CallCount("TerminateCluster"); n != 0 {
-		t.Errorf("terminated a cluster taken over under TakeOverOrCreate (%d calls)", n)
-	}
-	events := strings.Join(h.events(), "\n")
-	if !strings.Contains(events, "Warning "+v1alpha1.EventRetained) {
-		t.Errorf("no Warning saying the cluster was left running; events:\n%s", events)
+			if n := h.cloud.CallCount("TerminateCluster"); n != 1 {
+				t.Errorf("TerminateCluster called %d times, want once", n)
+			}
+			if got, _ := h.cloudCluster(seeded.ID); got.Status == "Active" {
+				t.Error("the cluster is still Active")
+			}
+		})
 	}
 }
 
-func TestTerminateEndsAClusterTakenOverOnRequest(t *testing.T) {
-	h, seeded := deleteTakenOver(t, v1alpha1.CreationTakeOverOnly)
+// The usual way out of a takeover nobody meant is deleting the object, and
+// under Terminate that ends the cluster, so the warning says to switch to
+// Retain first.
+func TestAnUnaskedTakeoverUnderTerminateWarnsBeforeTheDelete(t *testing.T) {
+	h := newHarness(t, credentialSecret(), readyAccount(), takeOverCluster("orders", func(c *v1alpha1.CloudCluster) {
+		c.Spec.DeletionPolicy = v1alpha1.DeletionTerminate
+	}))
+	h.seedCloudCluster(cloudsim.SeedSpec{DisplayName: "orders"})
+	h.reconcileCluster("orders")
 
-	if n := h.cloud.CallCount("TerminateCluster"); n != 1 {
-		t.Errorf("TerminateCluster called %d times for a cluster taken over under TakeOverOnly, want once", n)
-	}
-	if got, _ := h.cloudCluster(seeded.ID); got.Status == "Active" {
-		t.Error("the cluster is still Active")
+	events := strings.Join(h.events(), "\n")
+	if !strings.Contains(events, "set spec.deletionPolicy to Retain before deleting this object") {
+		t.Errorf("the takeover warning does not say deleting would terminate; events:\n%s", events)
 	}
 }
 

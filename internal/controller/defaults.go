@@ -18,8 +18,7 @@ const maxSubdomainLength = 13
 
 // resolveSubdomain returns the DNS label to ask for. A derived one that does not
 // fit is refused rather than truncated: it ends up in production URLs, so
-// inventing a name is worse than asking for one. spec.subdomain cannot be added
-// once omitted, so every refusal says to delete the object and apply it again.
+// inventing a name is worse than asking for one.
 func resolveSubdomain(explicit, displayName string) (string, error) {
 	if explicit != "" {
 		return explicit, nil
@@ -29,11 +28,11 @@ func resolveSubdomain(explicit, displayName string) (string, error) {
 	switch {
 	case derived == "":
 		return "", fmt.Errorf(
-			"cannot derive a subdomain from displayName %q: it has no letters, digits or dashes to use. spec.subdomain cannot be added to an existing object, so delete this one and apply it again with a subdomain of up to %d of them; nothing was created",
+			"cannot derive a subdomain from displayName %q: it has no letters, digits or dashes to use. Set spec.subdomain to up to %d of them; nothing was created",
 			displayName, maxSubdomainLength)
 	case len(derived) > maxSubdomainLength:
 		return "", fmt.Errorf(
-			"the subdomain derived from displayName %q is %q, which is %d characters, and RavenDB Cloud accepts at most %d. spec.subdomain cannot be added to an existing object, so delete this one and apply it again with a subdomain of up to %d characters; nothing was created",
+			"the subdomain derived from displayName %q is %q, which is %d characters, and RavenDB Cloud accepts at most %d. Set spec.subdomain to up to %d characters; nothing was created",
 			displayName, derived, len(derived), maxSubdomainLength, maxSubdomainLength)
 	}
 	return derived, nil

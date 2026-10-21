@@ -118,12 +118,17 @@ type ConnectionSecretSpec struct {
 	IncludeCertificate *bool `json:"includeCertificate,omitempty"`
 }
 
-// subdomain and displayName are pinned harder than provider and region on
-// purpose. displayName is the identity the operator looks the cluster up by,
-// and both feed the create request, so letting one appear after the fact is
-// how an operator ends up creating a second cluster nobody asked for. provider
-// and region may still be added, so a manifest can pin a value it inherited
-// from the CloudAccount defaults.
+// The identity rules live on CloudCluster rather than here, because they hold
+// only once status says the object has found or created its cluster, and a
+// rule on the spec cannot see status. Before that, nothing exists in RavenDB
+// Cloud yet, and fixing a typo is an edit rather than a delete.
+//
+// After that, subdomain and displayName are pinned harder than provider and
+// region on purpose. displayName is the identity the operator looks the
+// cluster up by, and both feed the create request, so letting one appear after
+// the fact is how an operator ends up creating a second cluster nobody asked
+// for. provider and region may still be added, so a manifest can pin a value
+// it inherited from the CloudAccount defaults.
 
 // CloudClusterSpec is the desired state of one RavenDB Cloud cluster.
 //
@@ -144,32 +149,29 @@ type ConnectionSecretSpec struct {
 //   - Applied, under managementPolicy Full. instanceType, nodes, and storage:
 //     a larger sizeGB, type and iops, with throughputMBps riding along on any
 //     of those. Each storage field is compared only when it is set.
-//   - Rejected at admission. accountRef, tier, subdomain and displayName can
-//     never change, and provider and region can never change away from a
-//     value they already had. RavenDB Cloud cannot move a cluster between any
-//     of them, so a manifest that asks is refused rather than left to differ
-//     forever. subdomain cannot be added later either, and displayName only
-//     as the object name it already defaulted to; provider and region can.
+//   - Fixed once this object has found or created its cluster, and rejected
+//     at admission after that. accountRef, tier, subdomain and displayName
+//     cannot change, and provider and region cannot change away from a value
+//     they already had. RavenDB Cloud cannot move a cluster between any of
+//     them, so a manifest that asks is refused rather than left to differ
+//     forever. subdomain cannot be added either, and displayName only as the
+//     object name it already defaulted to; provider and region can. Until the
+//     object has a cluster, all of them can be edited.
 //   - Accepted and reported, never applied. releaseChannel and
 //     networking.allowedIPs, which RavenDB Cloud takes at creation only, and
 //     a change to storage.throughputMBps alone, which it refuses. The
 //     operator reports the difference on the Synced condition and tells you
 //     to change it in the portal.
 //
-// +kubebuilder:validation:XValidation:rule="self.accountRef.name == oldSelf.accountRef.name",message="accountRef is immutable: a cluster cannot move between RavenDB Cloud accounts. Delete this object and apply it again with the right accountRef; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".accountRef.name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'GCP' || !has(self.storage) || !has(self.storage.type) || self.storage.type != 'SsdStandard'",message="Google Cloud products do not offer SsdStandard; leave spec.storage.type unset, or set it to SsdPremium",fieldPath=".storage.type"
 // +kubebuilder:validation:XValidation:rule="!has(self.nodes) || self.tier == 'Production' || self.nodes == 1",message="a Free or Development cluster has exactly one node: additional nodes are a Production feature in RavenDB Cloud. Leave spec.nodes unset or set it to 1",fieldPath=".nodes"
 // +kubebuilder:validation:XValidation:rule="!has(self.nodes) || self.tier != 'Production' || self.nodes >= 3",message="a Production cluster keeps its three standard nodes A, B and C, which RavenDB Cloud never removes. Set spec.nodes between 3 and 6",fieldPath=".nodes"
-// +kubebuilder:validation:XValidation:rule="self.tier == oldSelf.tier",message="tier is immutable: RavenDB Cloud cannot move a cluster between tiers. To use another tier, delete this object and apply it again with another spec.displayName; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".tier"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.provider) || (has(self.provider) && self.provider == oldSelf.provider)",message="provider is immutable: RavenDB Cloud cannot move a cluster between providers. To use another provider, delete this object and apply it again with another spec.displayName; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".provider"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.region) || (has(self.region) && self.region == oldSelf.region)",message="region is immutable: RavenDB Cloud cannot move a cluster between regions. To use another region, delete this object and apply it again with another spec.displayName; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".region"
-// +kubebuilder:validation:XValidation:rule="has(oldSelf.subdomain) == has(self.subdomain) && (!has(self.subdomain) || self.subdomain == oldSelf.subdomain)",message="subdomain is immutable, and cannot be added later either: it is baked into the cluster DNS names",fieldPath=".subdomain"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.creationMode) || (has(self.creationMode) && (self.creationMode == oldSelf.creationMode || (oldSelf.creationMode == 'TakeOverOrCreate' && self.creationMode == 'TakeOverOnly')))",message="creationMode cannot change, except from TakeOverOrCreate to TakeOverOnly, which confirms that taking over the cluster is meant. Delete this object and apply it again with another creationMode; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".creationMode"
 // +kubebuilder:validation:XValidation:rule="!has(self.creationMode) || self.creationMode != 'CreateOnly' || !has(self.managementPolicy) || self.managementPolicy != 'Observe'",message="creationMode CreateOnly needs managementPolicy Full: Observe never creates a cluster",fieldPath=".creationMode"
 type CloudClusterSpec struct {
 	// AccountRef selects the CloudAccount in this namespace whose credential
-	// and defaults this cluster uses. It cannot be changed: a cluster cannot
-	// move between RavenDB Cloud accounts.
+	// and defaults this cluster uses. It cannot change once this object has
+	// found or created its cluster: a cluster cannot move between RavenDB
+	// Cloud accounts.
 	//
 	// On Kubernetes 1.31 or newer, this lists the clusters of one account:
 	//
@@ -185,15 +187,17 @@ type CloudClusterSpec struct {
 	// Cloud keeps display names unique per account, ignoring case, and has no
 	// way to rename a cluster, which is what makes the name a safe identity.
 	//
-	// Set, it cannot be changed. Omitted, it can be added later only as the
-	// object name it defaulted to, ignoring case, which is what the export
-	// tool writes for a cluster this object already found.
+	// Until this object has found or created its cluster, it can be edited
+	// freely. After that it cannot change, and if it was omitted it can be
+	// added only as the object name it defaulted to, ignoring case, which is
+	// what the export tool writes for a cluster this object already found.
 	// +kubebuilder:validation:MaxLength=100
 	// +optional
 	DisplayName string `json:"displayName,omitempty"`
 
-	// Tier selects the RavenDB Cloud product tier. It cannot be changed:
-	// RavenDB Cloud cannot move a cluster between tiers.
+	// Tier selects the RavenDB Cloud product tier. It cannot change once this
+	// object has found or created its cluster: RavenDB Cloud cannot move a
+	// cluster between tiers.
 	//
 	// Free clusters cannot be created through the RavenDB Cloud API, only in
 	// the portal. A Free CloudCluster therefore only ever takes over a cluster
@@ -210,8 +214,9 @@ type CloudClusterSpec struct {
 	// whatever the cluster runs on, and a provider that differs from it means
 	// the name belongs to some other cluster (NameTaken).
 	//
-	// Once set it cannot be changed or removed. It can be added later, to pin
-	// the value the cluster already has.
+	// Once this object has found or created its cluster, a set provider
+	// cannot be changed or removed. It can still be added, to pin the value
+	// the cluster already has.
 	// +optional
 	Provider Provider `json:"provider,omitempty"`
 
@@ -222,8 +227,9 @@ type CloudClusterSpec struct {
 	// it takes over, a region that differs means the name belongs to some
 	// other cluster (NameTaken).
 	//
-	// Once set it cannot be changed or removed. It can be added later, to pin
-	// the value the cluster already has.
+	// Once this object has found or created its cluster, a set region cannot
+	// be changed or removed. It can still be added, to pin the value the
+	// cluster already has.
 	// +optional
 	Region string `json:"region,omitempty"`
 
@@ -292,14 +298,10 @@ type CloudClusterSpec struct {
 	// taken only RavenDB Cloud knows, so a taken one comes back as a refused
 	// create.
 	//
-	// Whichever way you leave this field on the first apply is how it stays:
-	// set, it cannot be changed; omitted, it cannot be added. So if the
-	// derived name turns out to be taken, no edit to this object fixes it.
-	// Delete the object and apply it again with an explicit subdomain; the
-	// cluster was never created, so nothing is lost.
-	//
-	// In a shared account, where names are likely to collide, setting it on
-	// the first apply is worth it.
+	// Until the cluster exists it can be set, changed or removed, so a
+	// derived name that is too long or already taken is fixed by setting this
+	// field. Once this object has found or created its cluster, it stays as
+	// it is: set, it cannot change; omitted, it cannot be added.
 	// +kubebuilder:validation:MaxLength=13
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$`
 	// +optional
@@ -319,8 +321,8 @@ type CloudClusterSpec struct {
 	// reshapes it until you say so. The resolved value is in
 	// status.managementPolicy.
 	//
-	// deletionPolicy does not depend on it, even under Observe: what Terminate
-	// may end is decided by creationMode.
+	// deletionPolicy does not depend on it: Terminate ends the cluster even
+	// under Observe.
 	// +optional
 	ManagementPolicy ManagementPolicy `json:"managementPolicy,omitempty"`
 
@@ -334,24 +336,20 @@ type CloudClusterSpec struct {
 	//   CreateOnly        never takes over. A cluster that already has the
 	//                     name is reported as NameTaken and left alone.
 	//
-	// It also decides what deletionPolicy Terminate may end. A cluster this
-	// object created is terminated. One it took over is terminated only under
-	// TakeOverOnly, where taking it over was asked for; one found under
-	// TakeOverOrCreate is left running, and a Warning event says so.
-	//
-	// kubectl ravendb-cloud export writes TakeOverOnly, so a manifest applied again
-	// from git never creates an empty cluster in place of one it could not
-	// find. It cannot change once set, with one exception: TakeOverOrCreate
-	// may become TakeOverOnly, which confirms that a cluster this object took
-	// over is meant to be its own.
+	// kubectl ravendb-cloud export writes TakeOverOnly, so a manifest applied
+	// again from git never creates an empty cluster in place of one it could
+	// not find. Once this object has found or created its cluster, the mode
+	// can change only to TakeOverOnly, which confirms that the cluster it
+	// holds is meant to be its own.
 	// +kubebuilder:default=TakeOverOrCreate
 	// +optional
 	CreationMode CreationMode `json:"creationMode,omitempty"`
 
 	// DeletionPolicy decides what deleting this object does to the cloud
 	// cluster. Retain, the default, keeps the cluster running. Terminate
-	// terminates it, which cannot be undone, when this object created it or
-	// took it over under creationMode TakeOverOnly.
+	// terminates it, which cannot be undone, whether this object created it or
+	// took it over. A terminated cluster is hidden in the RavenDB Cloud portal
+	// once termination completes, which frees its name for a new one.
 	// +kubebuilder:default=Retain
 	// +optional
 	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
@@ -362,13 +360,14 @@ type CloudClusterSpec struct {
 	// +optional
 	ConnectionSecret *ConnectionSecretSpec `json:"connectionSecret,omitempty"`
 
-	// PollInterval is how often the operator re-reads a settled cluster from
-	// RavenDB Cloud. Defaults to five minutes. While RavenDB Cloud is creating
-	// or changing the cluster, the operator looks every 30 seconds, or at this
-	// interval when it is shorter.
-	// +kubebuilder:default="5m"
+	// PollIntervalSeconds is how often, in seconds, the operator re-reads a
+	// settled cluster from RavenDB Cloud. Defaults to 300, five minutes. While
+	// RavenDB Cloud is creating or changing the cluster, the operator looks
+	// every 30 seconds, or at this interval when it is shorter.
+	// +kubebuilder:default=300
+	// +kubebuilder:validation:Minimum=1
 	// +optional
-	PollInterval *metav1.Duration `json:"pollInterval,omitempty"`
+	PollIntervalSeconds *int32 `json:"pollIntervalSeconds,omitempty"`
 }
 
 // StorageStatus is the observed data disk.
@@ -465,6 +464,14 @@ type CloudClusterStatus struct {
 	// rather than creating it. It decides the default managementPolicy.
 	// +optional
 	Adopted bool `json:"adopted,omitempty"`
+
+	// AccountDomain is the domain of the RavenDB Cloud account the cluster
+	// lives in, recorded when this object was bound to it. If the CloudAccount's
+	// Secret later holds a key for another account, every call would ask that
+	// other account, which has no such cluster, so the operator does nothing to
+	// the cluster and Ready reports WaitingForAccount until the keys match.
+	// +optional
+	AccountDomain string `json:"accountDomain,omitempty"`
 
 	// ProvisionAttemptedAt is when the operator asked RavenDB Cloud to create
 	// the cluster. It is set just before the request, so that if the operator
@@ -576,7 +583,13 @@ type CloudClusterStatus struct {
 // +kubebuilder:printcolumn:name="Cluster-ID",type=string,priority=1,JSONPath=`.status.productID`
 // +kubebuilder:printcolumn:name="URL",type=string,priority=1,JSONPath=`.status.urls[0]`
 // +kubebuilder:printcolumn:name="Message",type=string,priority=1,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
-// +kubebuilder:validation:XValidation:rule="has(oldSelf.spec.displayName) ? (has(self.spec.displayName) && self.spec.displayName == oldSelf.spec.displayName) : (!has(self.spec.displayName) || self.spec.displayName.lowerAscii() == self.metadata.name)",message="displayName is immutable: it is the name the operator finds the cluster by. It can be added later only as the name this object already uses, which is what the export tool writes",fieldPath=".spec.displayName"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (self.spec.accountRef.name == oldSelf.spec.accountRef.name)",message="accountRef cannot change once this object has found or created its cluster: a cluster cannot move between RavenDB Cloud accounts. Delete this object and apply it again with the right accountRef; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".spec.accountRef.name"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (self.spec.tier == oldSelf.spec.tier)",message="tier cannot change once this object has found or created its cluster: RavenDB Cloud cannot move a cluster between tiers. To use another tier, delete this object and apply it again with another spec.displayName; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".spec.tier"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (!has(oldSelf.spec.provider) || (has(self.spec.provider) && self.spec.provider == oldSelf.spec.provider))",message="provider cannot change or be removed once this object has found or created its cluster: RavenDB Cloud cannot move a cluster between providers. To use another provider, delete this object and apply it again with another spec.displayName; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".spec.provider"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (!has(oldSelf.spec.region) || (has(self.spec.region) && self.spec.region == oldSelf.spec.region))",message="region cannot change or be removed once this object has found or created its cluster: RavenDB Cloud cannot move a cluster between regions. To use another region, delete this object and apply it again with another spec.displayName; with the default deletionPolicy Retain nothing in RavenDB Cloud is touched",fieldPath=".spec.region"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (has(oldSelf.spec.subdomain) == has(self.spec.subdomain) && (!has(self.spec.subdomain) || self.spec.subdomain == oldSelf.spec.subdomain))",message="subdomain cannot change, be added or be removed once this object has found or created its cluster: it is baked into the cluster DNS names",fieldPath=".spec.subdomain"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (!has(oldSelf.spec.creationMode) || (has(self.spec.creationMode) && (self.spec.creationMode == oldSelf.spec.creationMode || self.spec.creationMode == 'TakeOverOnly')))",message="creationMode cannot change once this object has found or created its cluster, except to TakeOverOnly, which confirms the cluster it holds is meant to be its own",fieldPath=".spec.creationMode"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt)) || (has(oldSelf.spec.displayName) ? (has(self.spec.displayName) && self.spec.displayName == oldSelf.spec.displayName) : (!has(self.spec.displayName) || self.spec.displayName.lowerAscii() == self.metadata.name))",message="displayName cannot change once this object has found or created its cluster: it is the name the operator finds the cluster by. It can be added only as the name this object already uses, which is what the export tool writes",fieldPath=".spec.displayName"
 // +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 63",message="metadata.name must be at most 63 characters: the connection Secret carries it in the cloud.ravendb.net/cluster label, and a label value cannot be longer"
 
 // CloudCluster is one RavenDB Cloud cluster, created by this operator or found

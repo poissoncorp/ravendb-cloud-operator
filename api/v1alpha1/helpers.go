@@ -112,8 +112,8 @@ func (a *CloudAccount) EffectiveSecretKey() string {
 // EffectiveRefreshInterval returns how often to re-read the region and release
 // channel lists.
 func (a *CloudAccount) EffectiveRefreshInterval() time.Duration {
-	if a.Spec.RefreshInterval != nil && a.Spec.RefreshInterval.Duration > 0 {
-		return a.Spec.RefreshInterval.Duration
+	if s := a.Spec.RefreshIntervalSeconds; s != nil && *s > 0 {
+		return time.Duration(*s) * time.Second
 	}
 	return time.Hour
 }
@@ -179,8 +179,8 @@ func (c *CloudCluster) ConnectionSecretName() string {
 
 // EffectivePollInterval is how often to re-read a settled cluster.
 func (c *CloudCluster) EffectivePollInterval() time.Duration {
-	if c.Spec.PollInterval != nil && c.Spec.PollInterval.Duration > 0 {
-		return c.Spec.PollInterval.Duration
+	if s := c.Spec.PollIntervalSeconds; s != nil && *s > 0 {
+		return time.Duration(*s) * time.Second
 	}
 	return 5 * time.Minute
 }
@@ -208,8 +208,8 @@ func (s *StorageSpec) EffectiveStorageType(provider Provider) StorageType {
 // is mid-operation.
 //
 // Thirty seconds by default, because creating takes minutes and a tighter loop
-// would make calls for nothing. But a shorter spec.pollInterval wins: someone
-// who writes 5s is asking to be told sooner, and the operator's pacing, not
+// would make calls for nothing. But a shorter spec.pollIntervalSeconds wins:
+// someone who writes 5 is asking to be told sooner, and the operator's pacing, not
 // this constant, is what keeps the calls in check.
 func (c *CloudCluster) EffectiveTransitionalInterval() time.Duration {
 	if poll := c.EffectivePollInterval(); poll < defaultTransitionalInterval {

@@ -285,8 +285,8 @@ func TestContractTerminate(t *testing.T) {
 		t.Fatalf("TerminateCluster: %v", err)
 	}
 	// The record survives. RavenDB Cloud sets the status to Terminated and
-	// keeps the product, keeping its display name with it; only an explicit
-	// hideInPortal takes it out of the list, and nothing takes it out of
+	// keeps the product; the client asks for it to be hidden, which takes it
+	// out of the list and frees its display name. Nothing takes it out of
 	// details.
 	terminated, err := client.GetCluster(ctx, id)
 	if err != nil {
@@ -295,8 +295,8 @@ func TestContractTerminate(t *testing.T) {
 	if terminated.Status != cloudapi.StatusTerminated {
 		t.Errorf("status = %q, want Terminated", terminated.Status)
 	}
-	if !containsRef(t, client, "scratch") {
-		t.Error("a terminated product stays in the product list under its display name")
+	if containsRef(t, client, "scratch") {
+		t.Error("a product terminated by the client is still in the list, holding its display name")
 	}
 	// Gone rather than 404, and forever, because the record never disappears.
 	// The client treats it as success: the desired end state is reached either
@@ -869,6 +869,35 @@ func containsRef(t *testing.T, client cloudapi.Client, name string) bool {
 	return false
 }
 
+// TestContractTerminateFreesTheName: the client asks for the product to be
+// hidden, RavenDB Cloud hides it once termination completes, and a hidden
+// product no longer holds its display name. So a manifest deleted with
+// Terminate and applied again gets a new cluster under the same name.
+func TestContractTerminateFreesTheName(t *testing.T) {
+	client, _, _ := newMock(t)
+	ctx := context.Background()
+
+	id := mustCreate(t, client, "reused")
+	waitUntilActive(t, client, id)
+	if err := client.TerminateCluster(ctx, id); err != nil {
+		t.Fatalf("TerminateCluster: %v", err)
+	}
+	if got, err := client.GetCluster(ctx, id); err != nil || got.Status != cloudapi.StatusTerminated {
+		t.Fatalf("after terminating: %v, %v; want Terminated", got, err)
+	}
+
+	_, err := client.CreateCluster(ctx, cloudapi.CreateClusterRequest{
+		DisplayName: "reused", Provider: cloudapi.ProviderAWS, Region: "eu-central-1",
+		Tier: cloudapi.TierProduction, InstanceType: "PB10", ReleaseChannel: "Stable72",
+		SubdomainName: "reused2",
+		Storage:       cloudapi.Storage{SizeGiB: 50, Type: cloudapi.StorageSsdStandard},
+		AllowedIPs:    []string{"0.0.0.0/0"},
+	})
+	if err != nil {
+		t.Errorf("creating %q again after terminating it: %v", "reused", err)
+	}
+}
+
 // TestContractTerminatedIsNotAdoptable is the operator half of the same fact.
 // A dead product keeps its display name forever, so resolving a name has to
 // skip it or the operator would bind to a cluster that no longer runs.
@@ -878,8 +907,10 @@ func TestContractTerminatedIsNotAdoptable(t *testing.T) {
 
 	id := mustCreate(t, client, "recycled")
 	waitUntilActive(t, client, id)
-	if err := client.TerminateCluster(ctx, id); err != nil {
-		t.Fatalf("TerminateCluster: %v", err)
+	// Terminated in the portal, which leaves the record in the list. The
+	// operator's own terminate hides it: TestContractTerminateFreesTheName.
+	if err := sim.State().Terminate(id, false); err != nil {
+		t.Fatalf("terminating: %v", err)
 	}
 	if _, err := client.GetCluster(ctx, id); err != nil {
 		t.Fatalf("the record should survive: %v", err)

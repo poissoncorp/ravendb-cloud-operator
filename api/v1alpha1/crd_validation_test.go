@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,6 +131,17 @@ func baseCluster(namespace, name string) *v1alpha1.CloudCluster {
 	}
 }
 
+// holdCluster records in status that the object has found its cluster, which
+// is when its identity fields stop being editable. Status goes through its own
+// subresource, as the operator writes it.
+func holdCluster(t *testing.T, cluster *v1alpha1.CloudCluster) {
+	t.Helper()
+	cluster.Status.ProductID = "1-A"
+	if err := k8sClient.Status().Update(context.Background(), cluster); err != nil {
+		t.Fatalf("recording the cluster in status: %v", err)
+	}
+}
+
 // TestCRDRequiresOnlyAnAccountAndATier pins the smallest manifest the API
 // server takes: which account, and which tier. Everything else is defaulted,
 // resolved by the operator, or read from the cluster the name finds.
@@ -203,11 +215,11 @@ func TestCRDRejectsChangingImmutableFields(t *testing.T) {
 		// names the whole spec rather than the field to fix.
 		field string
 	}{
-		{"region", func(c *v1alpha1.CloudCluster) { c.Spec.Region = "us-east-1" }, "region is immutable", "spec.region"},
-		{"provider", func(c *v1alpha1.CloudCluster) { c.Spec.Provider = v1alpha1.ProviderGCP }, "provider is immutable", "spec.provider"},
-		{"tier", func(c *v1alpha1.CloudCluster) { c.Spec.Tier = v1alpha1.TierFree }, "tier is immutable", "spec.tier"},
-		{"subdomain", func(c *v1alpha1.CloudCluster) { c.Spec.Subdomain = "elsewhere" }, "subdomain is immutable", "spec.subdomain"},
-		{"displayName", func(c *v1alpha1.CloudCluster) { c.Spec.DisplayName = "somebody-elses" }, "displayName is immutable", "spec.displayName"},
+		{"region", func(c *v1alpha1.CloudCluster) { c.Spec.Region = "us-east-1" }, "region cannot change", "spec.region"},
+		{"provider", func(c *v1alpha1.CloudCluster) { c.Spec.Provider = v1alpha1.ProviderGCP }, "provider cannot change", "spec.provider"},
+		{"tier", func(c *v1alpha1.CloudCluster) { c.Spec.Tier = v1alpha1.TierFree }, "tier cannot change", "spec.tier"},
+		{"subdomain", func(c *v1alpha1.CloudCluster) { c.Spec.Subdomain = "elsewhere" }, "subdomain cannot change", "spec.subdomain"},
+		{"displayName", func(c *v1alpha1.CloudCluster) { c.Spec.DisplayName = "somebody-elses" }, "displayName cannot change", "spec.displayName"},
 		{"creationMode", func(c *v1alpha1.CloudCluster) { c.Spec.CreationMode = v1alpha1.CreationCreateOnly }, "creationMode cannot change", "spec.creationMode"},
 	}
 
@@ -222,6 +234,7 @@ func TestCRDRejectsChangingImmutableFields(t *testing.T) {
 			if err := k8sClient.Create(ctx, cluster); err != nil {
 				t.Fatalf("creating: %v", err)
 			}
+			holdCluster(t, cluster)
 			tc.mutate(cluster)
 			err := k8sClient.Update(ctx, cluster)
 			if err == nil {
@@ -240,7 +253,8 @@ func TestCRDRejectsChangingImmutableFields(t *testing.T) {
 // TestCRDRejectsAddingAnOmittedIdentityField closes the hole the table above
 // cannot see. An "immutable" rule written as `!has(oldSelf.x) || ...` only
 // fires when the field was already present, so a field omitted at create could
-// be set to anything later and the rule would wave it through.
+// be set to anything once the object holds its cluster, and the rule would
+// wave it through.
 //
 // For subdomain and displayName that is not cosmetic. displayName is the name
 // the operator finds its cluster by, and both feed the create request, so one
@@ -255,8 +269,8 @@ func TestCRDRejectsAddingAnOmittedIdentityField(t *testing.T) {
 		mutate  func(*v1alpha1.CloudCluster)
 		message string
 	}{
-		{"subdomain", func(c *v1alpha1.CloudCluster) { c.Spec.Subdomain = "sneaky" }, "subdomain is immutable"},
-		{"displayName", func(c *v1alpha1.CloudCluster) { c.Spec.DisplayName = "somebody-elses" }, "displayName is immutable"},
+		{"subdomain", func(c *v1alpha1.CloudCluster) { c.Spec.Subdomain = "sneaky" }, "subdomain cannot change"},
+		{"displayName", func(c *v1alpha1.CloudCluster) { c.Spec.DisplayName = "somebody-elses" }, "displayName cannot change"},
 	}
 
 	for _, tc := range cases {
@@ -270,6 +284,7 @@ func TestCRDRejectsAddingAnOmittedIdentityField(t *testing.T) {
 			if got := clusterField(cluster, tc.name); got != "" {
 				t.Fatalf("%s was %q after create, so this test is not exercising the omitted case", tc.name, got)
 			}
+			holdCluster(t, cluster)
 
 			tc.mutate(cluster)
 			err := k8sClient.Update(ctx, cluster)
@@ -295,8 +310,8 @@ func TestCRDRejectsRemovingAnIdentityField(t *testing.T) {
 		remove  func(*v1alpha1.CloudCluster)
 		message string
 	}{
-		{"subdomain", func(c *v1alpha1.CloudCluster) { c.Spec.Subdomain = "" }, "subdomain is immutable"},
-		{"displayName", func(c *v1alpha1.CloudCluster) { c.Spec.DisplayName = "" }, "displayName is immutable"},
+		{"subdomain", func(c *v1alpha1.CloudCluster) { c.Spec.Subdomain = "" }, "subdomain cannot change"},
+		{"displayName", func(c *v1alpha1.CloudCluster) { c.Spec.DisplayName = "" }, "displayName cannot change"},
 	}
 
 	for _, tc := range cases {
@@ -308,6 +323,7 @@ func TestCRDRejectsRemovingAnIdentityField(t *testing.T) {
 			if err := k8sClient.Create(ctx, cluster); err != nil {
 				t.Fatalf("creating: %v", err)
 			}
+			holdCluster(t, cluster)
 
 			tc.remove(cluster)
 			err := k8sClient.Update(ctx, cluster)
@@ -348,6 +364,7 @@ func TestCRDAllowsPinningAnInheritedProviderAndRegion(t *testing.T) {
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("creating: %v", err)
 	}
+	holdCluster(t, cluster)
 
 	cluster.Spec.Provider = v1alpha1.ProviderAWS
 	cluster.Spec.Region = "eu-central-1"
@@ -360,7 +377,7 @@ func TestCRDAllowsPinningAnInheritedProviderAndRegion(t *testing.T) {
 	if err == nil {
 		t.Fatal("the API server allowed removing region once it was set")
 	}
-	if !strings.Contains(err.Error(), "region is immutable") {
+	if !strings.Contains(err.Error(), "region cannot change") {
 		t.Errorf("message %q does not explain why", err.Error())
 	}
 }
@@ -396,6 +413,7 @@ func TestCRDRejectsMovingBetweenAccounts(t *testing.T) {
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("creating: %v", err)
 	}
+	holdCluster(t, cluster)
 
 	cluster.Spec.AccountRef.Name = "another-account"
 	err := k8sClient.Update(ctx, cluster)
@@ -429,8 +447,8 @@ func TestCRDAppliesDefaults(t *testing.T) {
 	}
 	// storage.type is deliberately not defaulted here; the correct value
 	// depends on the provider. TestCRDDefaultsAgreeWithAccessors covers that.
-	if cluster.Spec.PollInterval == nil || cluster.Spec.PollInterval.Duration.Minutes() != 5 {
-		t.Errorf("pollInterval defaulted to %v, want 5m", cluster.Spec.PollInterval)
+	if s := cluster.Spec.PollIntervalSeconds; s == nil || *s != 300 {
+		t.Errorf("pollIntervalSeconds defaulted to %v, want 300", s)
 	}
 }
 
@@ -585,10 +603,10 @@ func TestCRDDefaultsAgreeWithAccessors(t *testing.T) {
 	if got, want := account.Spec.APIKeySecretRef.Key, zeroAccount.EffectiveSecretKey(); got != want {
 		t.Errorf("apiKeySecretRef.key: CRD default %q, accessor %q", got, want)
 	}
-	if account.Spec.RefreshInterval == nil {
-		t.Error("refreshInterval was not defaulted by the API server")
-	} else if got, want := account.Spec.RefreshInterval.Duration, zeroAccount.EffectiveRefreshInterval(); got != want {
-		t.Errorf("refreshInterval: CRD default %v, accessor %v", got, want)
+	if account.Spec.RefreshIntervalSeconds == nil {
+		t.Error("refreshIntervalSeconds was not defaulted by the API server")
+	} else if got, want := time.Duration(*account.Spec.RefreshIntervalSeconds)*time.Second, zeroAccount.EffectiveRefreshInterval(); got != want {
+		t.Errorf("refreshIntervalSeconds: CRD default %v, accessor %v", got, want)
 	}
 
 	if got, want := cluster.Spec.DeletionPolicy, zeroCluster.EffectiveDeletionPolicy(); got != want {
@@ -597,10 +615,10 @@ func TestCRDDefaultsAgreeWithAccessors(t *testing.T) {
 	if got, want := cluster.Spec.CreationMode, zeroCluster.EffectiveCreationMode(); got != want {
 		t.Errorf("creationMode: CRD default %q, accessor %q", got, want)
 	}
-	if cluster.Spec.PollInterval == nil {
-		t.Error("pollInterval was not defaulted by the API server")
-	} else if got, want := cluster.Spec.PollInterval.Duration, zeroCluster.EffectivePollInterval(); got != want {
-		t.Errorf("pollInterval: CRD default %v, accessor %v", got, want)
+	if cluster.Spec.PollIntervalSeconds == nil {
+		t.Error("pollIntervalSeconds was not defaulted by the API server")
+	} else if got, want := time.Duration(*cluster.Spec.PollIntervalSeconds)*time.Second, zeroCluster.EffectivePollInterval(); got != want {
+		t.Errorf("pollIntervalSeconds: CRD default %v, accessor %v", got, want)
 	}
 	// storage.type is the one field here that deliberately carries no CRD
 	// default. The correct value depends on the provider, which the API server
@@ -689,6 +707,7 @@ func TestCRDAcceptsTheChangesThatOnlyConfirm(t *testing.T) {
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("creating: %v", err)
 	}
+	holdCluster(t, cluster)
 
 	cluster.Spec.DisplayName = "Legacy-Prod"
 	cluster.Spec.CreationMode = v1alpha1.CreationTakeOverOnly
@@ -699,6 +718,60 @@ func TestCRDAcceptsTheChangesThatOnlyConfirm(t *testing.T) {
 	cluster.Spec.CreationMode = v1alpha1.CreationTakeOverOrCreate
 	if err := k8sClient.Update(ctx, cluster); err == nil || !strings.Contains(err.Error(), "creationMode cannot change") {
 		t.Errorf("going back to TakeOverOrCreate gave %v; want it refused", err)
+	}
+}
+
+// TestCRDAllowsConfirmingACreateOnlyCluster: an object restored from git
+// without its status finds the cluster it once created, and CreateOnly then
+// refuses it. Moving to TakeOverOnly is the way to say it is this object's.
+func TestCRDAllowsConfirmingACreateOnlyCluster(t *testing.T) {
+	requireEnvtest(t)
+	ctx := context.Background()
+	cluster := baseCluster(newNamespace(t), "restored")
+	cluster.Spec.CreationMode = v1alpha1.CreationCreateOnly
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("creating: %v", err)
+	}
+	holdCluster(t, cluster)
+
+	cluster.Spec.CreationMode = v1alpha1.CreationTakeOverOnly
+	if err := k8sClient.Update(ctx, cluster); err != nil {
+		t.Errorf("moving CreateOnly to TakeOverOnly was refused: %v", err)
+	}
+}
+
+// TestCRDAllowsFixingIdentityBeforeTheClusterExists: until the object has
+// found or created its cluster nothing exists in RavenDB Cloud, so a typo is
+// fixed by editing. Once a create has gone out, that is over, because the
+// cluster may exist under what was sent.
+func TestCRDAllowsFixingIdentityBeforeTheClusterExists(t *testing.T) {
+	requireEnvtest(t)
+	ctx := context.Background()
+	cluster := baseCluster(newNamespace(t), "typo")
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("creating: %v", err)
+	}
+
+	cluster.Spec.AccountRef.Name = "the-right-account"
+	cluster.Spec.Tier = v1alpha1.TierDevelopment
+	cluster.Spec.Provider = v1alpha1.ProviderAzure
+	cluster.Spec.Region = "westeurope"
+	cluster.Spec.Subdomain = "typo-fixed"
+	cluster.Spec.DisplayName = "Typo Fixed"
+	cluster.Spec.CreationMode = v1alpha1.CreationCreateOnly
+	cluster.Spec.Storage = v1alpha1.StorageSpec{}
+	if err := k8sClient.Update(ctx, cluster); err != nil {
+		t.Fatalf("editing the identity of an object with no cluster yet was refused: %v", err)
+	}
+
+	attempted := metav1.Now()
+	cluster.Status.ProvisionAttemptedAt = &attempted
+	if err := k8sClient.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("recording the create in status: %v", err)
+	}
+	cluster.Spec.Tier = v1alpha1.TierProduction
+	if err := k8sClient.Update(ctx, cluster); err == nil || !strings.Contains(err.Error(), "tier cannot change") {
+		t.Errorf("changing the tier after a create went out gave %v; want it refused", err)
 	}
 }
 

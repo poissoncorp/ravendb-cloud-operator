@@ -23,8 +23,7 @@ type accountWait struct {
 	reason  string
 	message string
 
-	absent     bool // the CloudAccount does not exist
-	keyMissing bool // its API key Secret, or the key in it, does not
+	absent bool // the CloudAccount does not exist
 }
 
 // usableAccount reads the CloudAccount ref names and the client its key builds.
@@ -53,9 +52,8 @@ func usableAccount(
 	switch {
 	case errors.As(err, &missing):
 		return &account, nil, &accountWait{
-			reason:     v1alpha1.ReasonWaitingForAccount,
-			message:    sentence(missing.Error()),
-			keyMissing: true,
+			reason:  v1alpha1.ReasonWaitingForAccount,
+			message: sentence(missing.Error()),
 		}, nil
 	case err != nil:
 		return nil, nil, nil, err

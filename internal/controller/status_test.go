@@ -58,7 +58,7 @@ func TestReportUnlessServing(t *testing.T) {
 	} {
 		t.Run(string(tc.status), func(t *testing.T) {
 			cluster := &v1alpha1.CloudCluster{
-				Spec: v1alpha1.CloudClusterSpec{PollInterval: &metav1.Duration{Duration: poll}},
+				Spec: v1alpha1.CloudClusterSpec{PollIntervalSeconds: new(int32(poll / time.Second))},
 			}
 			r := &CloudClusterReconciler{}
 
@@ -112,7 +112,7 @@ func TestAnUnknownCloudStatusIsNamed(t *testing.T) {
 // the transitional default rather than being floored by it.
 func TestReportUnlessServingHonoursAShortPollInterval(t *testing.T) {
 	cluster := &v1alpha1.CloudCluster{
-		Spec: v1alpha1.CloudClusterSpec{PollInterval: &metav1.Duration{Duration: 2 * time.Second}},
+		Spec: v1alpha1.CloudClusterSpec{PollIntervalSeconds: new(int32(2))},
 	}
 	r := &CloudClusterReconciler{}
 
@@ -229,8 +229,7 @@ func TestALosingStatusWriteIsNotAnError(t *testing.T) {
 	// A spec change, so the pass has a status worth writing and therefore
 	// something to lose.
 	cluster := h.getCluster("orders")
-	faster := metav1.Duration{Duration: 90 * time.Second}
-	cluster.Spec.PollInterval = &faster
+	cluster.Spec.PollIntervalSeconds = new(int32(90))
 	if err := h.k8s.Update(context.Background(), cluster); err != nil {
 		t.Fatalf("editing the spec: %v", err)
 	}

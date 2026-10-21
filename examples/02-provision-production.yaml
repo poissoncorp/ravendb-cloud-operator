@@ -60,7 +60,7 @@ spec:
     name: orders-prod-connection
     includeCertificate: true
 
-  pollInterval: 5m
+  pollIntervalSeconds: 300
 
 # kubectl -n apps get cloudcluster orders-prod
 # NAME          STATUS    CHANGES   TIER         REGION         NODES   AGE

@@ -114,12 +114,14 @@ spec:
                 - Applied, under managementPolicy Full. instanceType, nodes, and storage:
                   a larger sizeGB, type and iops, with throughputMBps riding along on any
                   of those. Each storage field is compared only when it is set.
-                - Rejected at admission. accountRef, tier, subdomain and displayName can
-                  never change, and provider and region can never change away from a
-                  value they already had. RavenDB Cloud cannot move a cluster between any
-                  of them, so a manifest that asks is refused rather than left to differ
-                  forever. subdomain cannot be added later either, and displayName only
-                  as the object name it already defaulted to; provider and region can.
+                - Fixed once this object has found or created its cluster, and rejected
+                  at admission after that. accountRef, tier, subdomain and displayName
+                  cannot change, and provider and region cannot change away from a value
+                  they already had. RavenDB Cloud cannot move a cluster between any of
+                  them, so a manifest that asks is refused rather than left to differ
+                  forever. subdomain cannot be added either, and displayName only as the
+                  object name it already defaulted to; provider and region can. Until the
+                  object has a cluster, all of them can be edited.
                 - Accepted and reported, never applied. releaseChannel and
                   networking.allowedIPs, which RavenDB Cloud takes at creation only, and
                   a change to storage.throughputMBps alone, which it refuses. The
@@ -129,8 +131,9 @@ spec:
               accountRef:
                 description: |-
                   AccountRef selects the CloudAccount in this namespace whose credential
-                  and defaults this cluster uses. It cannot be changed: a cluster cannot
-                  move between RavenDB Cloud accounts.
+                  and defaults this cluster uses. It cannot change once this object has
+                  found or created its cluster: a cluster cannot move between RavenDB
+                  Cloud accounts.
 
                   On Kubernetes 1.31 or newer, this lists the clusters of one account:
 
@@ -194,16 +197,11 @@ spec:
                     CreateOnly        never takes over. A cluster that already has the
                                       name is reported as NameTaken and left alone.
 
-                  It also decides what deletionPolicy Terminate may end. A cluster this
-                  object created is terminated. One it took over is terminated only under
-                  TakeOverOnly, where taking it over was asked for; one found under
-                  TakeOverOrCreate is left running, and a Warning event says so.
-
-                  kubectl ravendb-cloud export writes TakeOverOnly, so a manifest applied again
-                  from git never creates an empty cluster in place of one it could not
-                  find. It cannot change once set, with one exception: TakeOverOrCreate
-                  may become TakeOverOnly, which confirms that a cluster this object took
-                  over is meant to be its own.
+                  kubectl ravendb-cloud export writes TakeOverOnly, so a manifest applied
+                  again from git never creates an empty cluster in place of one it could
+                  not find. Once this object has found or created its cluster, the mode
+                  can change only to TakeOverOnly, which confirms that the cluster it
+                  holds is meant to be its own.
                 enum:
                 - TakeOverOrCreate
                 - TakeOverOnly
@@ -214,8 +212,9 @@ spec:
                 description: |-
                   DeletionPolicy decides what deleting this object does to the cloud
                   cluster. Retain, the default, keeps the cluster running. Terminate
-                  terminates it, which cannot be undone, when this object created it or
-                  took it over under creationMode TakeOverOnly.
+                  terminates it, which cannot be undone, whether this object created it or
+                  took it over. A terminated cluster is hidden in the RavenDB Cloud portal
+                  once termination completes, which frees its name for a new one.
                 enum:
                 - Retain
                 - Terminate
@@ -231,9 +230,10 @@ spec:
                   Cloud keeps display names unique per account, ignoring case, and has no
                   way to rename a cluster, which is what makes the name a safe identity.
 
-                  Set, it cannot be changed. Omitted, it can be added later only as the
-                  object name it defaulted to, ignoring case, which is what the export
-                  tool writes for a cluster this object already found.
+                  Until this object has found or created its cluster, it can be edited
+                  freely. After that it cannot change, and if it was omitted it can be
+                  added only as the object name it defaulted to, ignoring case, which is
+                  what the export tool writes for a cluster this object already found.
                 maxLength: 100
                 type: string
               instanceType:
@@ -265,8 +265,8 @@ spec:
                   reshapes it until you say so. The resolved value is in
                   status.managementPolicy.
 
-                  deletionPolicy does not depend on it, even under Observe: what Terminate
-                  may end is decided by creationMode.
+                  deletionPolicy does not depend on it: Terminate ends the cluster even
+                  under Observe.
                 enum:
                 - Observe
                 - Full
@@ -315,14 +315,16 @@ spec:
                 maximum: 6
                 minimum: 1
                 type: integer
-              pollInterval:
-                default: 5m
+              pollIntervalSeconds:
+                default: 300
                 description: |-
-                  PollInterval is how often the operator re-reads a settled cluster from
-                  RavenDB Cloud. Defaults to five minutes. While RavenDB Cloud is creating
-                  or changing the cluster, the operator looks every 30 seconds, or at this
-                  interval when it is shorter.
-                type: string
+                  PollIntervalSeconds is how often, in seconds, the operator re-reads a
+                  settled cluster from RavenDB Cloud. Defaults to 300, five minutes. While
+                  RavenDB Cloud is creating or changing the cluster, the operator looks
+                  every 30 seconds, or at this interval when it is shorter.
+                format: int32
+                minimum: 1
+                type: integer
               provider:
                 description: |-
                   Provider is the hosting cloud. Defaults to the CloudAccount default when
@@ -330,8 +332,9 @@ spec:
                   whatever the cluster runs on, and a provider that differs from it means
                   the name belongs to some other cluster (NameTaken).
 
-                  Once set it cannot be changed or removed. It can be added later, to pin
-                  the value the cluster already has.
+                  Once this object has found or created its cluster, a set provider
+                  cannot be changed or removed. It can still be added, to pin the value
+                  the cluster already has.
                 enum:
                 - AWS
                 - Azure
@@ -346,8 +349,9 @@ spec:
                   it takes over, a region that differs means the name belongs to some
                   other cluster (NameTaken).
 
-                  Once set it cannot be changed or removed. It can be added later, to pin
-                  the value the cluster already has.
+                  Once this object has found or created its cluster, a set region cannot
+                  be changed or removed. It can still be added, to pin the value the
+                  cluster already has.
                 type: string
               releaseChannel:
                 description: |-
@@ -423,21 +427,18 @@ spec:
                   taken only RavenDB Cloud knows, so a taken one comes back as a refused
                   create.
 
-                  Whichever way you leave this field on the first apply is how it stays:
-                  set, it cannot be changed; omitted, it cannot be added. So if the
-                  derived name turns out to be taken, no edit to this object fixes it.
-                  Delete the object and apply it again with an explicit subdomain; the
-                  cluster was never created, so nothing is lost.
-
-                  In a shared account, where names are likely to collide, setting it on
-                  the first apply is worth it.
+                  Until the cluster exists it can be set, changed or removed, so a
+                  derived name that is too long or already taken is fixed by setting this
+                  field. Once this object has found or created its cluster, it stays as
+                  it is: set, it cannot change; omitted, it cannot be added.
                 maxLength: 13
                 pattern: ^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
                 type: string
               tier:
                 description: |-
-                  Tier selects the RavenDB Cloud product tier. It cannot be changed:
-                  RavenDB Cloud cannot move a cluster between tiers.
+                  Tier selects the RavenDB Cloud product tier. It cannot change once this
+                  object has found or created its cluster: RavenDB Cloud cannot move a
+                  cluster between tiers.
 
                   Free clusters cannot be created through the RavenDB Cloud API, only in
                   the portal. A Free CloudCluster therefore only ever takes over a cluster
@@ -457,12 +458,6 @@ spec:
             - tier
             type: object
             x-kubernetes-validations:
-            - fieldPath: .accountRef.name
-              message: 'accountRef is immutable: a cluster cannot move between RavenDB
-                Cloud accounts. Delete this object and apply it again with the right
-                accountRef; with the default deletionPolicy Retain nothing in RavenDB
-                Cloud is touched'
-              rule: self.accountRef.name == oldSelf.accountRef.name
             - fieldPath: .storage.type
               message: Google Cloud products do not offer SsdStandard; leave spec.storage.type
                 unset, or set it to SsdPremium
@@ -480,38 +475,6 @@ spec:
                 6
               rule: '!has(self.nodes) || self.tier != ''Production'' || self.nodes
                 >= 3'
-            - fieldPath: .tier
-              message: 'tier is immutable: RavenDB Cloud cannot move a cluster between
-                tiers. To use another tier, delete this object and apply it again
-                with another spec.displayName; with the default deletionPolicy Retain
-                nothing in RavenDB Cloud is touched'
-              rule: self.tier == oldSelf.tier
-            - fieldPath: .provider
-              message: 'provider is immutable: RavenDB Cloud cannot move a cluster
-                between providers. To use another provider, delete this object and
-                apply it again with another spec.displayName; with the default deletionPolicy
-                Retain nothing in RavenDB Cloud is touched'
-              rule: '!has(oldSelf.provider) || (has(self.provider) && self.provider
-                == oldSelf.provider)'
-            - fieldPath: .region
-              message: 'region is immutable: RavenDB Cloud cannot move a cluster between
-                regions. To use another region, delete this object and apply it again
-                with another spec.displayName; with the default deletionPolicy Retain
-                nothing in RavenDB Cloud is touched'
-              rule: '!has(oldSelf.region) || (has(self.region) && self.region == oldSelf.region)'
-            - fieldPath: .subdomain
-              message: 'subdomain is immutable, and cannot be added later either:
-                it is baked into the cluster DNS names'
-              rule: has(oldSelf.subdomain) == has(self.subdomain) && (!has(self.subdomain)
-                || self.subdomain == oldSelf.subdomain)
-            - fieldPath: .creationMode
-              message: creationMode cannot change, except from TakeOverOrCreate to
-                TakeOverOnly, which confirms that taking over the cluster is meant.
-                Delete this object and apply it again with another creationMode; with
-                the default deletionPolicy Retain nothing in RavenDB Cloud is touched
-              rule: '!has(oldSelf.creationMode) || (has(self.creationMode) && (self.creationMode
-                == oldSelf.creationMode || (oldSelf.creationMode == ''TakeOverOrCreate''
-                && self.creationMode == ''TakeOverOnly'')))'
             - fieldPath: .creationMode
               message: 'creationMode CreateOnly needs managementPolicy Full: Observe
                 never creates a cluster'
@@ -521,6 +484,14 @@ spec:
             description: CloudClusterStatus is the observed state of the cluster in
               RavenDB Cloud.
             properties:
+              accountDomain:
+                description: |-
+                  AccountDomain is the domain of the RavenDB Cloud account the cluster
+                  lives in, recorded when this object was bound to it. If the CloudAccount's
+                  Secret later holds a key for another account, every call would ask that
+                  other account, which has no such cluster, so the operator does nothing to
+                  the cluster and Ready reports WaitingForAccount until the keys match.
+                type: string
               adopted:
                 description: |-
                   Adopted records whether this object found its cluster already running
@@ -777,13 +748,61 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
+        - fieldPath: .spec.accountRef.name
+          message: 'accountRef cannot change once this object has found or created
+            its cluster: a cluster cannot move between RavenDB Cloud accounts. Delete
+            this object and apply it again with the right accountRef; with the default
+            deletionPolicy Retain nothing in RavenDB Cloud is touched'
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (self.spec.accountRef.name == oldSelf.spec.accountRef.name)'
+        - fieldPath: .spec.tier
+          message: 'tier cannot change once this object has found or created its cluster:
+            RavenDB Cloud cannot move a cluster between tiers. To use another tier,
+            delete this object and apply it again with another spec.displayName; with
+            the default deletionPolicy Retain nothing in RavenDB Cloud is touched'
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (self.spec.tier == oldSelf.spec.tier)'
+        - fieldPath: .spec.provider
+          message: 'provider cannot change or be removed once this object has found
+            or created its cluster: RavenDB Cloud cannot move a cluster between providers.
+            To use another provider, delete this object and apply it again with another
+            spec.displayName; with the default deletionPolicy Retain nothing in RavenDB
+            Cloud is touched'
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (!has(oldSelf.spec.provider) || (has(self.spec.provider) && self.spec.provider
+            == oldSelf.spec.provider))'
+        - fieldPath: .spec.region
+          message: 'region cannot change or be removed once this object has found
+            or created its cluster: RavenDB Cloud cannot move a cluster between regions.
+            To use another region, delete this object and apply it again with another
+            spec.displayName; with the default deletionPolicy Retain nothing in RavenDB
+            Cloud is touched'
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (!has(oldSelf.spec.region) || (has(self.spec.region) && self.spec.region
+            == oldSelf.spec.region))'
+        - fieldPath: .spec.subdomain
+          message: 'subdomain cannot change, be added or be removed once this object
+            has found or created its cluster: it is baked into the cluster DNS names'
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (has(oldSelf.spec.subdomain) == has(self.spec.subdomain) && (!has(self.spec.subdomain)
+            || self.spec.subdomain == oldSelf.spec.subdomain))'
+        - fieldPath: .spec.creationMode
+          message: creationMode cannot change once this object has found or created
+            its cluster, except to TakeOverOnly, which confirms the cluster it holds
+            is meant to be its own
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (!has(oldSelf.spec.creationMode) || (has(self.spec.creationMode) &&
+            (self.spec.creationMode == oldSelf.spec.creationMode || self.spec.creationMode
+            == ''TakeOverOnly'')))'
         - fieldPath: .spec.displayName
-          message: 'displayName is immutable: it is the name the operator finds the
-            cluster by. It can be added later only as the name this object already
-            uses, which is what the export tool writes'
-          rule: 'has(oldSelf.spec.displayName) ? (has(self.spec.displayName) && self.spec.displayName
+          message: 'displayName cannot change once this object has found or created
+            its cluster: it is the name the operator finds the cluster by. It can
+            be added only as the name this object already uses, which is what the
+            export tool writes'
+          rule: '!has(oldSelf.status) || (!has(oldSelf.status.productID) && !has(oldSelf.status.provisionAttemptedAt))
+            || (has(oldSelf.spec.displayName) ? (has(self.spec.displayName) && self.spec.displayName
             == oldSelf.spec.displayName) : (!has(self.spec.displayName) || self.spec.displayName.lowerAscii()
-            == self.metadata.name)'
+            == self.metadata.name))'
         - message: 'metadata.name must be at most 63 characters: the connection Secret
             carries it in the cloud.ravendb.net/cluster label, and a label value cannot
             be longer'

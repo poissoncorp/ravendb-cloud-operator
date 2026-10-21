@@ -417,7 +417,7 @@ spec:
     region: eu-central-1
     allowedIPs:
       - $LAB_ALLOWED_IPS
-  refreshInterval: 30s
+  refreshIntervalSeconds: 60
 EOF
 
 wait_for cloudaccount "$GUEST_ACCOUNT" '.status.conditions[?(@.type=="Ready")].status' True 90 \
@@ -688,7 +688,7 @@ spec:
   displayName: $GONE_NAME
   tier: Production
   managementPolicy: Full
-  pollInterval: 5s   # lab only, so the next look is seconds away
+  pollIntervalSeconds: 5   # lab only, so the next look is seconds away
 EOF
 wait_for_status "$GONE" Running 120 || { warn "never reached Running"; operator_logs 40; }
 GONE_UID="$(object_uid cloudcluster "$GONE")"
