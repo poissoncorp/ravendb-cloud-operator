@@ -50,7 +50,10 @@ behaviour changes.
 - Never name a RavenDB Cloud environment other than production, and never
   document how to point the operator at another API.
 - A 4xx from RavenDB Cloud that is not 429 is terminal: report it and stop. Do
-  not requeue it on a timer.
+  not requeue it on a timer. The few that lift without the object changing
+  (busy, too soon, the quota, a rejected key) are listed in
+  [calling-ravendb-cloud.md](docs/how-it-works/calling-ravendb-cloud.md); add
+  one there before treating it differently.
 
 ## Toolchain
 
