@@ -1,0 +1,47 @@
+# A one-off action, as its own object.
+#
+# "Restart node A" is not a state, so it is not a field on CloudCluster. A
+# field would have no settled value, and every resync would restart the node
+# again, which for a database is not a cosmetic problem. This object runs once
+# and then holds its own result, the way a Job does.
+#
+# It obeys the cluster it points at. While the CloudCluster has
+# managementPolicy Observe, is not Running yet, or does not exist yet,
+# the restart waits with STATUS Waiting and a message saying which, and it runs
+# as soon as that changes.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudClusterRestart
+metadata:
+  # The name is yours. Something that says when and why beats a counter,
+  # because these are the record of what was done to the cluster.
+  name: orders-a-after-oom
+  namespace: apps
+spec:
+  clusterRef:
+    name: orders-prod
+  # One upper case letter. Which tags exist is in the cluster's
+  # status.nodeTags; asking for one that is not there fails without spending a
+  # call to find out.
+  nodeTag: A
+
+#   kubectl -n apps get cloudclusterrestart
+#   NAME                 CLUSTER       NODE   STATUS      AGE
+#   orders-a-after-oom   orders-prod   A      Succeeded   4m
+#
+# STATUS goes Waiting, Restarting, then Succeeded or Failed. Done means the
+# Complete condition is True:
+#
+#   kubectl -n apps wait --for=condition=Complete cloudclusterrestart/orders-a-after-oom
+#
+# A failed restart sets the Failed condition instead, as a Job does, so the wait
+# above times out on it rather than reporting success.
+#
+# The spec is immutable and a restart runs once, so to restart again, or to
+# retry a Failed one, apply another object. Finished records stay until you
+# delete them, and they go with the cluster: the operator makes each one a
+# child of the CloudCluster it acted on.
+#
+# Create restarts with kubectl create and keep them out of the repository a
+# GitOps tool syncs. A restart remembers that it ran only in its status, so one
+# recreated without it, after a restore or when its CloudCluster is deleted and
+# applied again, restarts the node again.

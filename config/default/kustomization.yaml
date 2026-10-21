@@ -1,0 +1,7 @@
+namespace: ravendb-cloud-operator-system
+namePrefix: ravendb-cloud-operator-
+
+resources:
+- ../crd
+- ../rbac
+- ../manager

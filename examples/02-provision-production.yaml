@@ -1,0 +1,72 @@
+# A production cluster, spelled out.
+#
+# Everything below tier can also be omitted and inherited from the CloudAccount
+# or resolved by the operator. It is written in full to show what the operator
+# can drive, and a field written here is a field it manages from now on.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudCluster
+metadata:
+  name: orders-prod
+  namespace: apps
+spec:
+  accountRef:
+    name: ravendb-cloud
+
+  # The name in the RavenDB Cloud portal and the cluster's identity. RavenDB
+  # Cloud keeps display names unique per account and cannot rename a cluster,
+  # so this can never change here either. Defaults to metadata.name.
+  displayName: orders-prod
+
+  # Cannot change: RavenDB Cloud cannot move a cluster between tiers, providers
+  # or regions. provider and region default to the CloudAccount's.
+  tier: Production
+  provider: AWS
+  region: eu-central-1
+
+  instanceType: PB40                # omit to let the operator pick the smallest for the tier
+  nodes: 3                          # change this to add or remove nodes, one at a time
+  subdomain: orders-prod            # sent at create only; it is baked into the cluster DNS
+
+  # Taken at creation only. A later edit is reported on the Synced condition
+  # (CHANGES NotApplied), not applied; change it in the portal.
+  releaseChannel: Stable72
+
+  storage:
+    sizeGB: 200                     # grow this to trigger an online resize; disks never shrink
+    type: SsdPremium
+    iops: 3000                      # sent with a storage change
+    throughputMBps: 125             # rides along with a size, type or iops change
+
+  networking:
+    # Required by RavenDB Cloud, and accepted at creation only: later edits are
+    # reported as NotApplied, not applied. Change them in the portal.
+    allowedIPs:
+      - 10.0.0.0/8
+      - 203.0.113.7/32
+
+  # Full lets the operator create the cluster and change instance type,
+  # storage and node count to match this manifest. Left unset, it is Full for a
+  # cluster this object creates and Observe for one it finds already running.
+  # Writing Full down means that if a cluster named orders-prod already exists,
+  # it is taken over and reshaped to this manifest on the first pass.
+  managementPolicy: Full
+
+  # Retain is the default, and it means deleting this object leaves the cluster
+  # running. Terminate destroys it on delete, whatever managementPolicy says.
+  # Set it only where losing the data is acceptable.
+  deletionPolicy: Retain
+
+  connectionSecret:
+    name: orders-prod-connection
+    includeCertificate: true
+
+  pollInterval: 5m
+
+# kubectl -n apps get cloudcluster orders-prod
+# NAME          STATUS    CHANGES   TIER         REGION         NODES   AGE
+# orders-prod   Running   Applied   Production   eu-central-1   3       25m
+#
+# After raising nodes to 4, the operator adds a node and says so:
+#
+# NAME          STATUS     CHANGES    TIER         REGION         NODES   AGE
+# orders-prod   Updating   Applying   Production   eu-central-1   3       2d

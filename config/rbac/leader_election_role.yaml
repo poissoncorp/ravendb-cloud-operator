@@ -1,0 +1,20 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: leader-election-role
+  namespace: system
+  labels:
+    app.kubernetes.io/name: ravendb-cloud-operator
+# Leases only. controller-runtime has defaulted LeaderElectionResourceLock to
+# "leases" since v0.12 and this operator never set it to anything else, so the
+# configmaps grant the scaffold came with was never used.
+#
+# No delete and no patch: client-go acquires with create, renews with update,
+# and releasing the lease on a clean shutdown is also an update.
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "get", "list", "update", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]

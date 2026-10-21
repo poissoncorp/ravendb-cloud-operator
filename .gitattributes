@@ -1,0 +1,18 @@
+# Force LF on everything textual, regardless of the checkout platform.
+#
+# This is not a style preference. The labs and the Go toolchain wrapper are bash
+# scripts that run in git-bash, in Docker and inside a kind node. A CRLF shebang
+# line does not merely look wrong, it stops the script from executing at all,
+# with an error that names a command nobody typed. Windows checkouts default to
+# converting LF to CRLF, so without this file cloning the repo on Windows breaks
+# every script in it.
+* text=auto eol=lf
+
+# Explicitly binary, so git never rewrites bytes inside them.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pfx binary
+*.zip binary
+*.exe binary

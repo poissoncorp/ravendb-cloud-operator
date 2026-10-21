@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+#
+# Checks that are cheap, mechanical, and have already caught real mistakes in
+# this repository. Install with `make hooks`.
+#
+# These duplicate part of CI on purpose. CI is the backstop that catches what a
+# machine without the hook pushes; the hook is what stops the mistake becoming
+# a commit in the first place. Both are needed, because a hook can be skipped
+# with --no-verify and CI cannot.
+#
+# Everything here is conditional on what is actually staged, so a commit that
+# touches only documentation pays nothing.
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 1
+
+staged() { git diff --cached --name-only --diff-filter=ACM -- "$@"; }
+
+fail() { printf '\n  pre-commit: %s\n\n' "$1" >&2; exit 1; }
+
+# --- Go formatting ---------------------------------------------------------
+go_files="$(staged '*.go' | grep -v 'zz_generated' || true)"
+if [ -n "$go_files" ]; then
+  unformatted="$(./hack/go.sh gofmt -l $go_files 2>/dev/null | tr -d '\r')"
+  if [ -n "$unformatted" ]; then
+    printf '  gofmt would change:\n%s\n' "$unformatted" >&2
+    fail "run 'make fmt' and stage the result"
+  fi
+fi
+
+# --- It compiles, tests included -------------------------------------------
+#
+# go vet, not go build, and the difference is the whole point: go build ignores
+# _test.go files, so a changed function signature can leave every test in a
+# package uncompilable and still build clean. That is not hypothetical, it is
+# how a broken commit got made about ten minutes before this check existed.
+#
+# Two seconds on a warm cache, and only when Go changed.
+if [ -n "$go_files" ]; then
+  if ! ./hack/go.sh go vet ./...; then
+    fail "go vet failed; the tree does not compile (tests count)"
+  fi
+fi
+
+# --- Generated files match their source ------------------------------------
+#
+# This is the one that earned the hook. A CRD field was renamed, the generated
+# deepcopy and the CRD YAML were not refreshed, and the symptom arrived much
+# later as a lab failing with "unknown field" rather than anything naming the
+# rename. `make test` does depend on `generate manifests`, but a `go test` run
+# straight through hack/go.sh does not, and that is what people actually type.
+#
+# Only runs when api/ is staged, because it costs about six seconds.
+if [ -n "$(staged 'api/*')" ]; then
+  echo "  pre-commit: api/ changed, regenerating..." >&2
+  before="$(git status --porcelain)"
+  # Errors are shown, not swallowed. Hiding them made a failed generation look
+  # exactly like a clean one: nothing was written, the tree did not change, and
+  # the hook waved the commit through. That is the opposite of what it is for.
+  if ! ./hack/go.sh controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...; then
+    fail "controller-gen failed on the deepcopy pass; the markers in api/ do not compile"
+  fi
+  if ! ./hack/go.sh controller-gen crd rbac:roleName=manager-role paths=./...        output:crd:artifacts:config=config/crd/bases        output:rbac:artifacts:config=config/rbac; then
+    fail "controller-gen failed on the CRD pass; the markers in api/ do not compile"
+  fi
+  if [ "$before" != "$(git status --porcelain)" ]; then
+    git status --porcelain --short | sed 's/^/    /' >&2
+    fail "regenerating changed files; stage them (they are already written)"
+  fi
+fi
+
+# --- Shell scripts parse ---------------------------------------------------
+sh_files="$(staged '*.sh')"
+for f in $sh_files; do
+  bash -n "$f" 2>/dev/null || fail "$f is not valid bash"
+done
+
+# --- No em or en dashes ----------------------------------------------------
+#
+# A house rule in CLAUDE.md with no enforcement until now, which meant checking
+# it by hand on every document. Machines are better at this than people.
+#
+# The pattern is UTF-8 bytes rather than the characters themselves, for two
+# reasons. A check written with literal em dashes cannot pass its own check,
+# and matching by byte works whatever the locale is, which on this machine is
+# unset. hack/hooks/* is in the list because this file has no extension and
+# slipped through the extension-based list once already.
+text_files="$(staged '*.go' '*.md' '*.sh' '*.yaml' '*.yml' 'Makefile' 'hack/hooks/*')"
+if [ -n "$text_files" ]; then
+  offenders="$(grep -lP '\xe2\x80\x94|\xe2\x80\x93' -- $text_files 2>/dev/null || true)"
+  if [ -n "$offenders" ]; then
+    printf '  em or en dashes in:
+%s
+' "$offenders" >&2
+    fail "replace them with a hyphen, comma, colon or a shorter sentence"
+  fi
+fi
+
+exit 0

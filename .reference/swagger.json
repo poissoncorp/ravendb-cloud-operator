@@ -1,0 +1,1305 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "RavenDB Cloud API",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/account/info": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Gets account info",
+        "operationId": "Account_GetInfo",
+        "responses": {
+          "200": {
+            "description": "Account info",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountInfoResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountInfoResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountInfoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/metadata/regions/{cloudProvider}": {
+      "get": {
+        "tags": [
+          "Metadata"
+        ],
+        "summary": "Gets regions available for given cloud provider",
+        "operationId": "Metadata_GetRegions",
+        "parameters": [
+          {
+            "name": "cloudProvider",
+            "in": "path",
+            "description": "Cloud provider",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CloudProvider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of regions available for given cloud provider",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/metadata/instance-types/{cloudProvider}/{region}": {
+      "get": {
+        "tags": [
+          "Metadata"
+        ],
+        "summary": "Gets instance types available for given cloud provider and region",
+        "operationId": "Metadata_GetInstanceTypes",
+        "parameters": [
+          {
+            "name": "cloudProvider",
+            "in": "path",
+            "description": "Cloud provider",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CloudProvider"
+            }
+          },
+          {
+            "name": "region",
+            "in": "path",
+            "description": "Region",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of instance types available for given cloud provider and region",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceTypesResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceTypesResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceTypesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/metadata/release-channels": {
+      "get": {
+        "tags": [
+          "Metadata"
+        ],
+        "summary": "Gets product release channels",
+        "operationId": "Metadata_GetReleaseChannels",
+        "responses": {
+          "200": {
+            "description": "List of product release channels",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseChannelsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseChannelsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseChannelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/list": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Gets product list",
+        "operationId": "Products_List",
+        "responses": {
+          "200": {
+            "description": "Products list",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/create": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Creates product",
+        "operationId": "Products_Create",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Created Product Info",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCreatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCreatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/details/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Gets product details",
+        "operationId": "Products_GetDetails",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product details",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetailsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetailsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetailsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/security/certificate/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Gets product client certificate",
+        "operationId": "Products_GetCertificate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product client certificate",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/storage": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Changes product storage",
+        "operationId": "Products_ChangeStorage",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeStorageRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeStorageRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeStorageRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeStorageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/instance-type": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Changes product instance type",
+        "operationId": "Products_ChangeInstanceType",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeInstanceTypeRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeInstanceTypeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeInstanceTypeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeInstanceTypeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/restart-node": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Restart node",
+        "operationId": "Products_RestartNode",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartNodeRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartNodeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartNodeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartNodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/terminate/{id}": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Terminate product",
+        "operationId": "Products_Terminate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminateProductRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminateProductRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminateProductRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminateProductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "410": {
+            "description": "Gone"
+          }
+        }
+      }
+    },
+    "/api/v1/products/additional-node/add": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Add additional node",
+        "operationId": "Products_AddAdditionalNode",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAdditionalProductNodeRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAdditionalProductNodeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAdditionalProductNodeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAdditionalProductNodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/products/additional-node/remove": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Remove additional node",
+        "operationId": "Products_RemoveAdditionalNode",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAdditionalProductNodeRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAdditionalProductNodeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAdditionalProductNodeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAdditionalProductNodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountInfoResponse": {
+        "type": "object",
+        "properties": {
+          "domainName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AddAdditionalProductNodeRequest": {
+        "required": [
+          "productId"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChangeInstanceTypeRequest": {
+        "required": [
+          "instanceType",
+          "productId"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "instanceType": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChangeStorageRequest": {
+        "required": [
+          "productId",
+          "size",
+          "storageType"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "storageType": {
+            "$ref": "#/components/schemas/StorageType"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iops": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "throughput": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CloudProvider": {
+        "enum": [
+          "Aws",
+          "Azure",
+          "Gcp"
+        ],
+        "type": "string"
+      },
+      "ContractTerm": {
+        "enum": [
+          "OnDemand",
+          "Yearly"
+        ],
+        "type": "string"
+      },
+      "CpuPriority": {
+        "enum": [
+          "Shared",
+          "Basic",
+          "Standard",
+          "Performance"
+        ],
+        "type": "string"
+      },
+      "DeploymentType": {
+        "enum": [
+          "Standard",
+          "Serverless"
+        ],
+        "type": "string"
+      },
+      "HardwareInfoResponse": {
+        "type": "object",
+        "properties": {
+          "cpuPriority": {
+            "$ref": "#/components/schemas/CpuPriority"
+          },
+          "cpus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ram": {
+            "type": "number",
+            "format": "double"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageResponse"
+          },
+          "additionalStorage": {
+            "$ref": "#/components/schemas/StorageResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InstanceTypeItemResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tier": {
+            "$ref": "#/components/schemas/ProductTier"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/InstanceTypeParametersResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InstanceTypeParametersResponse": {
+        "type": "object",
+        "properties": {
+          "virtualCpus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ram": {
+            "type": "number",
+            "format": "double"
+          },
+          "availableDiskSizes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "numberOfNodes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "availableStorageTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorageTypeInfoResponse"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InstanceTypesResponse": {
+        "type": "object",
+        "properties": {
+          "instanceTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstanceTypeItemResponse"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "IopsRangeResponse": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentOption": {
+        "enum": [
+          "Monthly",
+          "YearlyUpfront"
+        ],
+        "type": "string"
+      },
+      "PaymentPlanResponse": {
+        "type": "object",
+        "properties": {
+          "contractTerm": {
+            "$ref": "#/components/schemas/ContractTerm"
+          },
+          "contractValidUntil": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "paymentOption": {
+            "$ref": "#/components/schemas/PaymentOption"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProductCreateRequest": {
+        "required": [
+          "allowedIps",
+          "cloudProvider",
+          "diskSize",
+          "displayName",
+          "instanceTypeName",
+          "region",
+          "releaseChannel",
+          "storageTypeName",
+          "tier"
+        ],
+        "type": "object",
+        "properties": {
+          "cloudProvider": {
+            "$ref": "#/components/schemas/CloudProvider"
+          },
+          "instanceTypeName": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "displayName": {
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "releaseChannel": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "subdomainName": {
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
+          },
+          "tier": {
+            "$ref": "#/components/schemas/ProductTier"
+          },
+          "region": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "diskSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iops": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "throughput": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "storageTypeName": {
+            "$ref": "#/components/schemas/StorageType"
+          },
+          "allowedIps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "diskLayout": {
+            "$ref": "#/components/schemas/PublicApiDiskLayout"
+          },
+          "deploymentType": {
+            "$ref": "#/components/schemas/DeploymentType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProductCreatedResponse": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProductDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "subdomainName": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "instanceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudProvider": {
+            "$ref": "#/components/schemas/CloudProvider"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProductStatus"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/ProductTier"
+          },
+          "region": {
+            "type": "string",
+            "nullable": true
+          },
+          "dns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "nodeTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "releaseChannel": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentPlan": {
+            "$ref": "#/components/schemas/PaymentPlanResponse"
+          },
+          "hardwareInfo": {
+            "$ref": "#/components/schemas/HardwareInfoResponse"
+          },
+          "security": {
+            "$ref": "#/components/schemas/SecurityResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProductListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProductListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductListItem"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProductStatus": {
+        "enum": [
+          "Creating",
+          "Active",
+          "DeployingChanges",
+          "Terminating",
+          "Terminated",
+          "Error",
+          "AwaitingPayment"
+        ],
+        "type": "string"
+      },
+      "ProductTier": {
+        "enum": [
+          "Free",
+          "Development",
+          "Production"
+        ],
+        "type": "string"
+      },
+      "PublicApiDiskLayout": {
+        "enum": [
+          "RootOnly",
+          "SingleDataDisk"
+        ],
+        "type": "string"
+      },
+      "RegionsResponse": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseChannelBuildType": {
+        "enum": [
+          "Stable",
+          "Development"
+        ],
+        "type": "string"
+      },
+      "ReleaseChannelItemResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "ravenVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "buildType": {
+            "$ref": "#/components/schemas/ReleaseChannelBuildType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseChannelsResponse": {
+        "type": "object",
+        "properties": {
+          "defaultReleaseChannel": {
+            "type": "string",
+            "nullable": true
+          },
+          "releaseChannels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseChannelItemResponse"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RemoveAdditionalProductNodeRequest": {
+        "required": [
+          "nodeTag",
+          "productId"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "nodeTag": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RestartNodeRequest": {
+        "required": [
+          "nodeTag",
+          "productId"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "nodeTag": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SecurityResponse": {
+        "type": "object",
+        "properties": {
+          "allowedIps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "StorageResponse": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iops": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "throughput": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/StorageType"
+          },
+          "availableDiskSizes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "StorageType": {
+        "enum": [
+          "SsdStandard",
+          "SsdPremium"
+        ],
+        "type": "string"
+      },
+      "StorageTypeInfoResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/StorageType"
+          },
+          "iopsRange": {
+            "$ref": "#/components/schemas/IopsRangeResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TerminateProductRequest": {
+        "type": "object",
+        "properties": {
+          "hideInPortal": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "RavenDbCloudApiKey": {
+        "type": "apiKey",
+        "description": "Please provide the RavenDB Cloud API key in header 'X-Api-Key'",
+        "name": "X-Api-Key",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "RavenDbCloudApiKey": [ ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "Account"
+    },
+    {
+      "name": "Metadata"
+    },
+    {
+      "name": "Products"
+    }
+  ]
+}

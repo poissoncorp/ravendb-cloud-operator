@@ -1,0 +1,51 @@
+# A production cluster, spelled out.
+#
+# The display name is the identity: if a cluster named orders-prod already runs
+# in the account, this object takes it over; if not, the operator creates it.
+# Everything below tier can be omitted and inherited from the CloudAccount or
+# resolved by the operator, and a field written here is a field it manages.
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudCluster
+metadata:
+  name: orders-prod
+  namespace: apps
+spec:
+  accountRef:
+    name: ravendb-cloud
+
+  displayName: orders-prod          # the name in the portal; cannot change
+  tier: Production                  # cannot change
+  provider: AWS                     # cannot change once set
+  region: eu-central-1              # cannot change once set
+  instanceType: PB40                # omit to let the operator pick the smallest for the tier
+  nodes: 3                          # add/remove nodes by changing this
+  subdomain: orders-prod            # sent at create only; baked into the cluster DNS
+  releaseChannel: Stable72          # taken at creation only; later edits are reported
+
+  storage:
+    sizeGB: 200                     # grow this to trigger an online resize
+    type: SsdPremium
+    iops: 3000
+    throughputMBps: 125
+
+  networking:
+    # Required by RavenDB Cloud, and accepted at creation only: later edits are
+    # reported on the Synced condition, not applied. Change them in the portal.
+    allowedIPs:
+      - 10.0.0.0/8
+      - 203.0.113.7/32
+
+  # Full: the operator may create the cluster and change instance type, storage
+  # and node count to match this manifest. Unset, it is Full for a cluster this
+  # object creates and Observe for one it finds already running.
+  managementPolicy: Full
+
+  # Retain is the default, and it means deleting this object leaves the cluster
+  # running. Set Terminate only where losing the data is acceptable.
+  deletionPolicy: Retain
+
+  connectionSecret:
+    name: orders-prod-connection
+    includeCertificate: true
+
+  pollInterval: 5m

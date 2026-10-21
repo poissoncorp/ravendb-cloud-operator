@@ -1,0 +1,29 @@
+# Toolchain binaries fetched or built by the Makefile, and a kind binary the
+# labs pick up when kind is not on the PATH. All reproducible:
+# `make envtest-assets` refetches the envtest apiserver and etcd.
+bin/
+
+# Go build and test output
+*.exe
+*.test
+*.out
+cover.out
+coverage.*
+vendor/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local scratch. Anything a lab or a debugging session leaves behind belongs
+# here rather than in the tree.
+scratch/
+tmp/
+*.local.yaml
+*.local.yml
+
+# hack/cloud-drift configuration: names the private RavenDB Cloud source.
+.cloud-drift.env

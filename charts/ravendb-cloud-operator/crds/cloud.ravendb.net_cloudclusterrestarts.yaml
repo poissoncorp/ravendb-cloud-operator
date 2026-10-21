@@ -1,0 +1,212 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: cloudclusterrestarts.cloud.ravendb.net
+spec:
+  group: cloud.ravendb.net
+  names:
+    categories:
+    - ravendb
+    kind: CloudClusterRestart
+    listKind: CloudClusterRestartList
+    plural: cloudclusterrestarts
+    shortNames:
+    - rcr
+    - rcrestart
+    singular: cloudclusterrestart
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterRef.name
+      name: Cluster
+      type: string
+    - jsonPath: .spec.nodeTag
+      name: Node
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Complete")].reason
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.conditions[?(@.type=="Complete")].message
+      name: Message
+      priority: 1
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          CloudClusterRestart restarts one node of a CloudCluster. Like a Job, it runs
+          once and then holds its own result.
+
+          It obeys the cluster it points at. A CloudCluster whose
+          managementPolicy is Observe, holds the restart back and says so rather than
+          reaching into a cluster the operator was told not to touch. It runs as soon
+          as that changes.
+
+          Once it starts, the operator makes the CloudCluster its owner, so deleting
+          the CloudCluster takes its restart records with it. Finished ones are
+          otherwise yours to delete, the way a Job without ttlSecondsAfterFinished is.
+
+          Create it with kubectl create, not from a repository a GitOps tool syncs. It
+          remembers that it ran only in its status, so one recreated without it
+          restarts the node again.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              CloudClusterRestartSpec names one node to restart, once.
+
+              The spec cannot be changed after the object is created. To restart again,
+              or to restart another node, create another CloudClusterRestart; each one is
+              the record of a single restart.
+            properties:
+              clusterRef:
+                description: |-
+                  ClusterRef selects the CloudCluster in this namespace to act on.
+
+                  On Kubernetes 1.31 or newer, this lists the restarts of one cluster:
+
+                    kubectl get cloudclusterrestarts --field-selector spec.clusterRef.name=<cluster>
+                properties:
+                  name:
+                    description: Name of the referenced object.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              nodeTag:
+                description: |-
+                  NodeTag is the RavenDB cluster node to restart, for example A: one of
+                  the tags in the CloudCluster's status.nodeTags, which are single upper
+                  case letters. A tag the cluster does not have fails the restart.
+                pattern: ^[A-Z]$
+                type: string
+            required:
+            - clusterRef
+            - nodeTag
+            type: object
+            x-kubernetes-validations:
+            - message: 'a CloudClusterRestart is immutable: create another one to
+                restart again'
+              rule: self == oldSelf
+          status:
+            description: CloudClusterRestartStatus is how far the restart got.
+            properties:
+              completedAt:
+                description: CompletedAt is when the cluster returned to Active afterwards.
+                format: date-time
+                type: string
+              conditions:
+                description: |-
+                  Conditions hold Complete, whose reason is the STATUS column, Failed once
+                  the restart failed, as on a Job, and Reconciling or Stalled for kstatus.
+                  Complete is True only for Succeeded:
+
+                    Waiting     not asked yet: the cluster is not Active, another restart of
+                                it is under way, it is not reachable, or its policy does
+                                not allow a restart; the message says which
+                    Restarting  RavenDB Cloud was asked and the node is coming back
+                    Succeeded   the node came back and the cluster is Active again
+                    Failed      it did not happen, or the cluster did not come back; the
+                                message says why. A restart runs once, so create a new
+                                CloudClusterRestart to try again
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              issuedAt:
+                description: |-
+                  IssuedAt is when the operator asked RavenDB Cloud to restart the node.
+                  It is set just before the request, so a node is restarted at most once,
+                  even if the operator stops before it records the result.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the spec generation this status
+                  reflects.
+                format: int64
+                type: integer
+            type: object
+        type: object
+    selectableFields:
+    - jsonPath: .spec.clusterRef.name
+    served: true
+    storage: true
+    subresources:
+      status: {}
