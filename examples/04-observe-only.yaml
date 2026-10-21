@@ -46,5 +46,5 @@ spec:
 # search   ClusterNotFound                                     30s
 #
 # TIER, REGION and NODES are what the cluster reports, so they stay empty until
-# the object is bound. The message says to fix a wrong name by deleting this object and applying it
-# again with the right spec.displayName, since that field cannot be edited.
+# the object is bound. Nothing is bound yet, so a wrong name is fixed by
+# correcting spec.displayName.
