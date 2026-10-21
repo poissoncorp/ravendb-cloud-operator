@@ -1,0 +1,119 @@
+{{- if .Values.rbac.create }}
+{{- /*
+The rules are NOT written here. They come from files/manager-rules.yaml, which
+`make chart-sync` copies out of config/rbac/role.yaml, which controller-gen
+generates from the +kubebuilder:rbac markers on the reconcilers.
+
+Restating them in this template is the one thing that must not happen. Adding a
+marker would then grant nothing to Helm users, and the failure would be a
+permission error at runtime in somebody else's cluster. `make chart-verify`
+fails if this copy is stale, and the release workflow runs it before packaging.
+*/ -}}
+{{- $rules := .Files.Get "files/manager-rules.yaml" -}}
+{{- $scope := include "operator.rbacScope" . -}}
+{{- if not $rules }}{{ fail "files/manager-rules.yaml is missing; run 'make chart-sync'" }}{{ end }}
+apiVersion: rbac.authorization.k8s.io/v1
+{{- if eq $scope "cluster" }}
+kind: ClusterRole
+metadata:
+  name: {{ include "operator.fullname" . }}-manager
+{{- else }}
+kind: Role
+metadata:
+  name: {{ include "operator.fullname" . }}-manager
+  namespace: {{ .Values.watchNamespace }}
+{{- end }}
+  labels: {{- include "operator.labels" . | nindent 4 }}
+rules:
+{{ $rules }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+{{- if eq $scope "cluster" }}
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "operator.fullname" . }}-manager
+{{- else }}
+kind: RoleBinding
+metadata:
+  name: {{ include "operator.fullname" . }}-manager
+  namespace: {{ .Values.watchNamespace }}
+{{- end }}
+  labels: {{- include "operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  {{- if eq $scope "cluster" }}
+  kind: ClusterRole
+  {{- else }}
+  kind: Role
+  {{- end }}
+  name: {{ include "operator.fullname" . }}-manager
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "operator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+{{- /* Leader election needs leases in the operator's own namespace only. */}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "list", "update", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "operator.fullname" . }}-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "operator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if and .Values.metrics.enabled .Values.metrics.secure }}
+---
+{{- /*
+Serving authenticated metrics means asking the API server who is calling and
+whether they may scrape, which is a TokenReview and a SubjectAccessReview.
+Granted only when metrics are actually on, because it is a real privilege and
+most installs do not need it.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "operator.fullname" . }}-metrics-auth
+  labels: {{- include "operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "operator.fullname" . }}-metrics-auth
+  labels: {{- include "operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "operator.fullname" . }}-metrics-auth
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "operator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

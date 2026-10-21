@@ -1,0 +1,49 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - cloud.ravendb.net
+  resources:
+  - cloudaccounts
+  - cloudclusterrestarts
+  - cloudclusters
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - cloud.ravendb.net
+  resources:
+  - cloudaccounts/status
+  - cloudclusterrestarts/status
+  - cloudclusters/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - cloud.ravendb.net
+  resources:
+  - cloudclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch

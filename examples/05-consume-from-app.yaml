@@ -1,0 +1,65 @@
+# The payoff: an application that never touches the RavenDB Cloud portal.
+#
+# The operator writes <cluster>-connection with the endpoints and the client
+# certificate, unpacked from the archive RavenDB Cloud serves. The pod mounts it
+# and is done. No manual download, no copying a .pfx into a Secret by hand, no
+# rebuild when the cluster gains a node. It is the same Secret whether the
+# CloudCluster created its cluster, took it over, or only observes it.
+#
+# Keys in the connection Secret:
+#
+#   url                       first node endpoint
+#   urls                      all node endpoints, comma separated
+#   nodeTags                  RavenDB node tags (A,B,C), aligned with urls
+#   studioURL                 RavenDB Studio address
+#   productID                 RavenDB Cloud cluster id
+#   tls.crt                   client certificate, PEM
+#   tls.key                   client private key, PEM
+#   client.pem                certificate and key in one PEM
+#   client.pfx                PKCS#12, no password
+#   client.with-password.pfx  PKCS#12, protected
+#   certificate.password      password for the protected PKCS#12
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-api
+  namespace: apps
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orders-api
+  template:
+    metadata:
+      labels:
+        app: orders-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/acme/orders-api:1.4.2
+          env:
+            # RavenDB clients take a list of node URLs.
+            - name: RAVENDB_URLS
+              valueFrom:
+                secretKeyRef:
+                  name: orders-prod-connection
+                  key: urls
+            # Point the client at the mounted PEM material.
+            - name: RAVENDB_CERT_PATH
+              value: /etc/ravendb/tls.crt
+            - name: RAVENDB_KEY_PATH
+              value: /etc/ravendb/tls.key
+          volumeMounts:
+            - name: ravendb-cert
+              mountPath: /etc/ravendb
+              readOnly: true
+      volumes:
+        - name: ravendb-cert
+          secret:
+            secretName: orders-prod-connection
+            defaultMode: 0400
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key

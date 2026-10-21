@@ -1,0 +1,4 @@
+resources:
+- cloud_v1alpha1_cloudaccount.yaml
+- cloud_v1alpha1_cloudcluster.yaml
+- cloud_v1alpha1_cloudclusterrestart.yaml

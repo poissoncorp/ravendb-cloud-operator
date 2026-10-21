@@ -1,0 +1,54 @@
+# Step 1: the credential and the shared defaults.
+#
+# A CloudAccount is the one object that holds a RavenDB Cloud API key. Every
+# CloudCluster points at one. Put the defaults your team shares here, so the
+# cluster manifests stay down to what actually differs between them.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ravendb-cloud-api-key
+  namespace: apps
+type: Opaque
+stringData:
+  # Create this in the RavenDB Cloud portal under Account -> API Keys.
+  apiKey: "REPLACE_ME"
+---
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudAccount
+metadata:
+  name: ravendb-cloud
+  namespace: apps
+spec:
+  apiKeySecretRef:
+    name: ravendb-cloud-api-key
+    key: apiKey
+
+  # Inherited by every CloudCluster that references this account, when the
+  # operator creates one. A cluster it finds already running keeps what it has.
+  defaults:
+    provider: AWS
+    region: eu-central-1
+    releaseChannel: Stable72
+    # Open to the internet, which is convenient for a first look and wrong for
+    # anything real. The operator emits a Warning event when it creates a
+    # cluster with this, rather than refusing it, because a lab and some
+    # networks legitimately need it. Narrow it to your egress ranges before
+    # this account creates anything you care about: RavenDB Cloud accepts the
+    # list at creation only, so widening it later means the portal.
+    allowedIPs:
+      - 0.0.0.0/0
+
+# After applying, the operator verifies the key and mirrors the regions and
+# release channels you can order into status:
+#
+#   kubectl -n apps get cloudaccount ravendb-cloud
+#   NAME            STATUS     DOMAIN               AGE
+#   ravendb-cloud   Verified   acme.ravendb.cloud   30s
+#
+#   kubectl -n apps get cloudaccount ravendb-cloud -o jsonpath='{.status.providers}'
+#   -> the regions available to you, per provider
+#
+# STATUS reads KeyMissing until the Secret exists, and KeyRejected when RavenDB
+# Cloud does not accept the key. Put a new key in the Secret and the account
+# verifies it again at once.

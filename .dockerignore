@@ -1,0 +1,6 @@
+bin/
+.reference/
+examples/
+config/
+hack/
+.git/

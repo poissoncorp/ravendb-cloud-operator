@@ -1,0 +1,44 @@
+# The credential, pointed at the lab control plane.
+#
+# spec.endpoint is an ordinary field rather than a test hook, which is what lets
+# one script run against either control plane. It is not the only difference
+# though, and this file used to claim it was: a real environment also needs
+# names nothing else on the account has taken, deadlines measured in minutes,
+# and an allowedIPs list somebody chose on purpose.
+#
+# LAB_TARGET=cloud in labs/00_setup.sh writes the equivalent of this file
+# against a real endpoint and supplies all three. See labs/README.md.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ravendb-cloud-api-key
+  namespace: apps
+type: Opaque
+stringData:
+  # Matches --api-key on the mock. In production this is an API key you create
+  # in the RavenDB Cloud portal under Account -> API Keys.
+  apiKey: lab-api-key
+---
+apiVersion: cloud.ravendb.net/v1alpha1
+kind: CloudAccount
+metadata:
+  name: ravendb-cloud
+  namespace: apps
+spec:
+  apiKeySecretRef:
+    name: ravendb-cloud-api-key
+    key: apiKey
+
+  endpoint: http://mockcloud.ravendb-cloud-lab.svc.cluster.local
+
+  defaults:
+    provider: AWS
+    region: eu-central-1
+    # Inert against the stand-in, which has no firewall to configure. The cloud
+    # target does not inherit this: see LAB_ALLOWED_IPS in labs/lib.sh.
+    allowedIPs:
+      - 0.0.0.0/0
+
+  # Faster than the 1h default, so a lab that rotates a key or watches the
+  # lists do not have to wait an hour to see the effect.
+  refreshInterval: 2m

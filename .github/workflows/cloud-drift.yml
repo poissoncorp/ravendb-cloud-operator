@@ -1,0 +1,55 @@
+name: Cloud drift
+
+# Has RavenDB Cloud moved under the simulator since it was last checked?
+# The public OpenAPI document is compared with .reference/swagger.json, and,
+# when the repository secrets below are set, the RavenDB Cloud source is
+# compared with the commit the simulator was last checked against, in the
+# paths this operator depends on. That source is private, so its location,
+# the pinned commit and the watched paths are secrets, and the log carries
+# counts, never names. A failed run means: look locally (hack/cloud-drift).
+#
+#   CLOUD_REPO        the source repository, owner/name
+#   CLOUD_REF         the branch to compare with
+#   CLOUD_REPO_TOKEN  a token that can read it
+#   CLOUD_PIN         the commit the simulator was last checked against
+#   CLOUD_WATCH       the paths to watch, separated by spaces
+#
+# GitHub disables a schedule after 60 days without activity in the
+# repository; the run page offers to enable it again.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SOURCE: ${{ secrets.CLOUD_REPO_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: check out the RavenDB Cloud source
+        if: env.HAS_SOURCE == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ${{ secrets.CLOUD_REPO }}
+          ref: ${{ secrets.CLOUD_REF }}
+          token: ${{ secrets.CLOUD_REPO_TOKEN }}
+          path: .cloud-src
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: compare
+        env:
+          CLOUD_SRC: ${{ env.HAS_SOURCE == 'true' && '.cloud-src' || '' }}
+          CLOUD_PIN: ${{ secrets.CLOUD_PIN }}
+          CLOUD_WATCH: ${{ secrets.CLOUD_WATCH }}
+        run: go run ./hack/cloud-drift

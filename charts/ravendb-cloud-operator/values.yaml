@@ -1,0 +1,85 @@
+# Every value here maps to a flag on the manager or a field on its Deployment.
+# Nothing here configures RavenDB Cloud itself: that is what a CloudAccount is.
+
+image:
+  repository: ghcr.io/ravendb/ravendb-cloud-operator
+  # Empty means the chart's appVersion, which is the operator release the chart
+  # was published for. Set this only to pin something else on purpose.
+  #
+  # Deliberately not "latest": a Deployment pinned to a moving tag reinstalls
+  # something different on every pod restart, and this process holds an API key
+  # and owns finalizers.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Secrets in the release namespace that can pull the image above. Required for
+# a private registry or an air-gapped mirror, which is the only way to install
+# this where ghcr.io is not reachable.
+#
+#   imagePullSecrets: [{name: my-registry-creds}]
+imagePullSecrets: []
+
+# watchNamespace restricts the operator to one namespace. Empty means every
+# namespace. The operator's permissions follow it, see rbac.scope.
+watchNamespace: ""
+
+rbac:
+  create: true
+  # Empty follows watchNamespace: a Role in that namespace when it is set, a
+  # ClusterRole when it is not. "cluster" grants cluster-wide even with a
+  # watchNamespace; "namespace" needs one.
+  scope: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# One replica, on purpose. The operator's pacing is per process, so a second
+# active manager would double the request rate.
+# Leader election keeps a second replica passive if you run one anyway.
+replicaCount: 1
+leaderElection: true
+
+metrics:
+  enabled: false
+  # HTTPS plus authentication and authorization, which needs the operator to be
+  # allowed to create TokenReviews and SubjectAccessReviews. The chart grants
+  # that only when metrics are on.
+  secure: true
+  port: 8443
+  service:
+    enabled: false
+
+# Logging. The zero value is production: JSON, sampled, info and above.
+logging:
+  development: false
+  level: info
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}
+
+# Development only. Leave empty.
+cloudEndpoint: ""
+
+# Extra environment variables for the manager, in the Kubernetes list form, so
+# valueFrom works as well as a plain value. Passed through as written, which is
+# what keeps valueFrom available and means a numeric-looking value needs
+# --set-string or a values file: plain --set infers the type, and the API server
+# refuses an env value that is not a string.
+#
+#   extraEnv:
+#     - name: HTTPS_PROXY
+#       value: http://proxy.internal:3128
+extraEnv: []

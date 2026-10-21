@@ -1,0 +1,78 @@
+# The lab's stand-in RavenDB Cloud control plane.
+#
+# The operator talks to this exactly as it would talk to api.cloud.ravendb.net;
+# the only difference is the URL in CloudAccount.spec.endpoint. That field is
+# not a lab hack, it is a real part of the API, which is what makes running the
+# whole thing for free possible.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ravendb-cloud-lab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mockcloud
+  namespace: ravendb-cloud-lab
+  labels:
+    app: mockcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mockcloud
+  template:
+    metadata:
+      labels:
+        app: mockcloud
+    spec:
+      containers:
+        - name: mockcloud
+          image: ravendb-mockcloud:lab
+          imagePullPolicy: IfNotPresent
+          args:
+            - --addr=:8080
+            - --api-key=lab-api-key
+            - --domain=acme.ravendb.cloud
+            # Long enough that the operator visibly passes through Creating,
+            # short enough that the lab does not become a coffee break. The
+            # real thing takes minutes.
+            #
+            # No --seed: the labs that need a cluster somebody else made seed
+            # their own through /_lab, under a name carrying the run id. A
+            # cluster seeded here would outlive every run and keep its name.
+            - --provision-duration=5s
+            - --change-duration=3s
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /_lab/healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mockcloud
+  namespace: ravendb-cloud-lab
+spec:
+  selector:
+    app: mockcloud
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
