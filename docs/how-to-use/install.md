@@ -5,11 +5,14 @@
 ## With Helm
 
 ```bash
-helm install ravendb-cloud-operator oci://ghcr.io/ravendb/charts/ravendb-cloud-operator \
-  --version 0.1.0 --namespace ravendb-cloud-operator-system --create-namespace
+helm repo add ravendb-cloud-operator https://ravendb.github.io/ravendb-cloud-operator/helm
+helm install ravendb-cloud-operator ravendb-cloud-operator/ravendb-cloud-operator \
+  --version <version> --namespace ravendb-cloud-operator-system --create-namespace
 ```
 
-The chart pins the image of its release. The values worth knowing:
+The versions are on the [releases page](https://github.com/ravendb/ravendb-cloud-operator/releases).
+The chart pins the image of its release, `docker.io/ravendb/ravendb-cloud-operator`. The values
+worth knowing:
 
 | Value | Default | Does |
 |---|---|---|
@@ -22,6 +25,17 @@ The chart pins the image of its release. The values worth knowing:
 
 Run one replica. If you run two, only one acts at a time and the other stands
 by.
+
+## Without Helm
+
+Every release carries `install.yaml`: the CRDs, the RBAC and the operator in one file.
+
+```bash
+kubectl apply --server-side -f https://github.com/ravendb/ravendb-cloud-operator/releases/download/v<version>/install.yaml
+```
+
+It installs into `ravendb-cloud-operator-system` with cluster-wide permissions; the Helm chart
+is the way to keep the operator to one namespace.
 
 ## From a checkout
 
@@ -40,14 +54,16 @@ sit there with nothing reconciling them.
 ## Upgrading the operator
 
 Helm installs the CRDs from the chart's `crds/` directory once, and never
-upgrades them. Apply the new ones yourself, then upgrade, with `<chart>` being
-what you installed from:
+upgrades them. Apply the new ones yourself, then upgrade:
 
 ```bash
-helm show crds <chart> --version <new> | kubectl apply --server-side -f -
-helm upgrade ravendb-cloud-operator <chart> --version <new> \
+helm repo update ravendb-cloud-operator
+helm show crds ravendb-cloud-operator/ravendb-cloud-operator --version <new> | kubectl apply --server-side -f -
+helm upgrade ravendb-cloud-operator ravendb-cloud-operator/ravendb-cloud-operator --version <new> \
   --namespace ravendb-cloud-operator-system
 ```
+
+With `install.yaml`, apply the new release's file the same way you applied the first.
 
 A new API version, rather than a new release of `v1alpha1`, is a different
 procedure: [upgrading.md](upgrading.md).

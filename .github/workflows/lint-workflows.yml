@@ -1,0 +1,27 @@
+name: Lint workflows
+
+# A mistake in a workflow otherwise shows up only when it runs, and the release
+# workflows run once per release. actionlint checks expressions, job and step
+# references, permissions and, with the runner's shellcheck, every run block.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # go run at a pinned version, so the download is checked against the Go
+      # checksum database rather than piped from a script on a branch.
+      - name: actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -color
