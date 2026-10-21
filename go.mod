@@ -2,7 +2,7 @@ module github.com/ravendb/ravendb-cloud-operator
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/getkin/kin-openapi v0.149.0
