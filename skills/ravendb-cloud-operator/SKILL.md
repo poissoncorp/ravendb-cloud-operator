@@ -20,14 +20,16 @@ Three kinds, all namespaced:
 
 ## The smallest working setup
 
+The API key goes into a Secret created from a prompt, never into a manifest
+file that could reach git:
+
+```bash
+read -rsp 'RavenDB Cloud API key: ' key && echo
+kubectl create secret generic ravendb-cloud-api-key --from-literal=apiKey="$key"
+unset key
+```
+
 ```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ravendb-cloud-api-key
-stringData:
-  apiKey: <a key from the RavenDB Cloud portal>
----
 apiVersion: cloud.ravendb.net/v1alpha1
 kind: CloudAccount
 metadata:
